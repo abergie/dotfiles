@@ -1,0 +1,20 @@
+"*":
+  editor:
+    showIndentGuide: true
+    invisibles: {}
+    fontFamily: "Hack"
+    softWrapAtPreferredLineLength: true
+  core:
+    disabledPackages: [
+      "background-tips"
+      "exception-reporting"
+      "metrics"
+    ]
+  "spell-check":
+    grammars: [
+      "text.plain"
+      "source.gfm"
+      "text.git-commit"
+    ]
+  welcome:
+    showOnStartup: false

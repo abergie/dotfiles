@@ -1,0 +1,13 @@
+## Export PATH
+export PATH=/usr/local/bin:$HOME/bin:/usr/local/sbin:$PATH
+
+## Put brew's ruby in front
+export PATH=/usr/local/opt/ruby/bin:$PATH
+
+## Use gnu tools instead
+export PATH=$(brew --prefix coreutils)/libexec/gnubin:$PATH
+
+## Add npm to path
+export PATH=$HOME/.node/bin:$PATH
+
+
