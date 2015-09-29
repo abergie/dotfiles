@@ -352,3 +352,4 @@ defaults write com.apple.Safari AppleEnableSwipeNavigateWithScrolls -bool false
 
 
 echo "Done!"
+exit 0

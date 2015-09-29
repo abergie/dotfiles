@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-##
-## Based on https://github.com/MatthewMueller/dots
-##
+#
+# Based on https://github.com/MatthewMueller/dots
+#
 
 # set -e
 

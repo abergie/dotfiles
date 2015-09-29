@@ -35,7 +35,6 @@ apps=(
   android-file-transfer
   caffeine
 )
-  # bittorrent-sync
 
 # fonts
 fonts=(
@@ -48,43 +47,31 @@ fonts=(
 # Specify the location of the apps
 appdir="/Applications"
 
-main() {
+# Check if homebrew is installed
+if test ! $(which brew); then
+  echo "Installing homebrew..."
+  ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+fi
 
-  # Check if homebrew is installed
-  homebrew
+# Install homebrew-cask
+echo "Installing cask..."
+brew tap phinze/homebrew-cask
+brew install phinze/cask/brew-cask
 
-  # Install homebrew-cask
-  echo "Installing cask..."
-  brew tap phinze/homebrew-cask
-  brew install phinze/cask/brew-cask
+# Tap alternative versions
+brew tap caskroom/versions
 
-  # Tap alternative versions
-  brew tap caskroom/versions
+# Tap the fonts
+brew tap caskroom/fonts
 
-  # Tap the fonts
-  brew tap caskroom/fonts
+# install apps
+echo "Installing apps..."
+brew cask install --appdir=$appdir ${apps[@]}
 
-  # install apps
-  echo "Installing apps..."
-  brew cask install --appdir=$appdir ${apps[@]}
+# install fonts
+echo "Installing fonts..."
+brew cask install ${fonts[@]}
 
-  # install fonts
-  echo "Installing fonts..."
-  brew cask install ${fonts[@]}
+brew cleanup
 
-  cleanup
-}
-
-homebrew() {
-  if test ! $(which brew); then
-    echo "Installing homebrew..."
-    ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
-  fi
-}
-
-cleanup() {
-  brew cleanup
-}
-
-main "$@"
 exit 0

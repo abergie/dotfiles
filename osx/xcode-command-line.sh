@@ -13,3 +13,5 @@ echo ""
 echo "Installing XCode command line tools..."
 echo "(Will need to accept Terms now)"
 xcode-select --install
+
+exit 0

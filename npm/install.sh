@@ -20,3 +20,5 @@ packages=(
 )
 
 npm install -g ${packages[@]}
+
+exit 0
