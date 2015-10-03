@@ -6,8 +6,6 @@
 
 set -e
 
-
-
 # try connecting to github
 echo ""
 echo "Testing connection to GitHub..."
