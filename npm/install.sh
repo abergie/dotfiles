@@ -9,6 +9,7 @@ set -e
 # npm default global packages
 packages=(
   grunt-cli
+  gulp
   http-server
   uglify-js
   jshint
