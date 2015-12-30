@@ -12,6 +12,9 @@ set -e
 # Ask for the administrator password upfront
 sudo -v
 
+# Keep-alive: update existing `sudo` time stamp until `.osx` has finished
+while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
+
 echo "Some Awesome OSX preferences"
 
 ###############################################################################
@@ -331,6 +334,10 @@ echo ""
 echo "Speeding up wake from sleep to 24 hours from an hour"
 # http://www.cultofmac.com/221392/quick-hack-speeds-up-retina-macbooks-wake-from-sleep-os-x-tips/
 sudo pmset -a standbydelay 86400
+
+echo ""
+echo "Disable the sound effects on boot"
+sudo nvram SystemAudioVolume=" "
 
 # echo ""
 # echo "Disable computer sleep and stop the display from shutting off"
