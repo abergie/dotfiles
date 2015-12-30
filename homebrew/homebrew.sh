@@ -29,30 +29,30 @@ brew install findutils
 brew install bash
 
 # Install more recent versions of some OS X tools
-brew tap homebrew/dupes
+# brew tap homebrew/dupes
 brew install homebrew/dupes/grep
 
 # Install other useful binaries
 binaries=(
-  graphicsmagick
-  webkit2png
-  ffmpeg
-  python
-  tree
   ack
-  go
-  git
-  mercurial
-  ruby
-  wget
-  gifsicle
-  openssl
-  xvid
   faac
-  x264
-  vim
-  zsh
+  ffmpeg
+  gifsicle
+  git
+  go
+  graphicsmagick
+  mercurial
   node
+  openssl
+  python
+  ruby
+  tree
+  vim
+  webkit2png
+  wget
+  x264
+  xvid
+  zsh
 )
 
 # Install the binaries

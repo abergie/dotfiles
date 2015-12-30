@@ -8,40 +8,43 @@ set -e
 
 # Apps
 apps=(
+  android-file-transfer
+  atom
+  betterzipql
+  caffeine
   dropbox
+  firefox
+  firefoxdeveloperedition
+  flash
+  flux
   google-chrome
   google-chrome-canary
   google-drive
-  firefox
-  firefoxdeveloperedition
-  spotify
-  flash
-  atom
-  sublime-text3
-  virtualbox
+  intellij-idea
   iterm2
-  flux
-  skitch
-  vlc
-  qlcolorcode
-  qlstephen
-  qlmarkdown
-  quicklook-json
-  quicklook-csv
-  betterzipql
-  skype
-  transmission
+  java7
   keka
-  android-file-transfer
-  caffeine
+  qlcolorcode
+  qlmarkdown
+  qlstephen
+  quicklook-csv
+  quicklook-json
+  skitch
+  skype
+  spotify
+  sublime-text3
+  transmission
+  virtualbox
+  vlc
+  zoomus
 )
 
 # fonts
 fonts=(
-  font-m-plus
   font-clear-sans
-  font-roboto
   font-hack
+  font-m-plus
+  font-roboto
 )
 
 # Specify the location of the apps
@@ -54,9 +57,7 @@ if test ! $(which brew); then
 fi
 
 # Install homebrew-cask
-echo "Installing cask..."
-brew tap phinze/homebrew-cask
-brew install phinze/cask/brew-cask
+echo "Tapping casks..."
 
 # Tap alternative versions
 brew tap caskroom/versions
@@ -72,6 +73,7 @@ brew cask install --appdir=$appdir ${apps[@]}
 echo "Installing fonts..."
 brew cask install ${fonts[@]}
 
-brew cleanup
+# Tidy up
+brew cask cleanup
 
 exit 0
