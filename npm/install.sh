@@ -8,16 +8,17 @@ set -e
 
 # npm default global packages
 packages=(
+  bower
+  forever
   grunt-cli
   gulp
   http-server
-  uglify-js
+  jasmine
   jshint
-  yo
-  bower
   node-inspector
-  forever
   nodemon
+  uglify-js
+  yo
 )
 
 npm install -g ${packages[@]}
