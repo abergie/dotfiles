@@ -22,13 +22,15 @@ apps=(
   google-drive
   intellij-idea
   iterm2
-  java7
+  java
+  keepassx
   keka
   qlcolorcode
   qlmarkdown
   qlstephen
   quicklook-csv
   quicklook-json
+  postman
   skitch
   skype
   spotify
