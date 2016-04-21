@@ -208,6 +208,10 @@ defaults write com.apple.dock expose-animation-duration -float 0.1
 defaults write com.apple.dock "expose-group-by-app" -bool true
 
 echo ""
+echo "Disable Mission Control keyboard shortcuts (breaks Atom editor multi-line select)"
+# TODO
+
+echo ""
 echo "Setting Dock to auto-hide and removing the auto-hiding delay"
 defaults write com.apple.dock autohide -bool true
 defaults write com.apple.dock autohide-delay -float 0
@@ -351,12 +355,6 @@ defaults write com.google.Chrome.canary AppleEnableSwipeNavigateWithScrolls -boo
 defaults write org.mozilla.firefox AppleEnableSwipeNavigateWithScrolls -bool false
 defaults write org.mozilla.firefoxdeveloperedition AppleEnableSwipeNavigateWithScrolls -bool false
 defaults write com.apple.Safari AppleEnableSwipeNavigateWithScrolls -bool false
-
-###############################################################################
-# Kill affected applications
-###############################################################################
-
-
 
 echo "Done!"
 exit 0

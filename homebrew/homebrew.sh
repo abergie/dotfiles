@@ -41,7 +41,9 @@ binaries=(
   git
   go
   graphicsmagick
+  jenv
   mercurial
+  maven
   node
   openssl
   python
