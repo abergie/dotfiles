@@ -13,6 +13,7 @@ apps=(
   betterzipql
   caffeine
   dropbox
+  docker
   firefox
   firefoxdeveloperedition
   flash
@@ -34,11 +35,12 @@ apps=(
   postman
   skitch
   skype
+  slack
   spotify
-  sublime-text3
-  transmission
+  sublime-text
   virtualbox
   vlc
+  whatsapp
   zoomus
 )
 
