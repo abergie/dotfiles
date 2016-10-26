@@ -53,12 +53,12 @@ fonts=(
 )
 
 # Specify the location of the apps
-appdir="/Applications"
+# appdir="/Applications"
 
 # Check if homebrew is installed
 if test ! $(which brew); then
   echo "Installing homebrew..."
-  ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+  /usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
 fi
 
 # Install homebrew-cask
@@ -72,7 +72,8 @@ brew tap caskroom/fonts
 
 # install apps
 echo "Installing apps..."
-brew cask install --appdir=$appdir ${apps[@]}
+# brew cask install --appdir=$appdir ${apps[@]}
+brew cask install ${apps[@]}
 
 # install fonts
 echo "Installing fonts..."
