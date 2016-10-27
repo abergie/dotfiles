@@ -23,8 +23,6 @@ apps=(
   google-drive
   intellij-idea
   iterm2
-  java
-  java7
   keepassx
   keka
   qlcolorcode

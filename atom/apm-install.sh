@@ -13,11 +13,8 @@ packages=(
   atom-beautify
 )
 
-# Check if apm (Atom Package Manager) is installed
-if test $(apm help install); then
-  # install packages
-  echo "Installing Atom Packages..."
-  brew cask install ${packages[@]}
-fi
+echo "Installing Atom Packages..."
+apm install ${packages[@]}
+
 
 exit 0
