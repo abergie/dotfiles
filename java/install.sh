@@ -3,7 +3,7 @@
 # http://www.jenv.be/
 #
 
-#!/bin/zsh
+#!/bin/sh
 
 set -e
 

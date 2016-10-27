@@ -10,6 +10,7 @@ set -e
 apps=(
   android-file-transfer
   atom
+  avira-antivirus
   betterzipql
   caffeine
   dropbox

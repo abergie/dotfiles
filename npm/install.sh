@@ -1,10 +1,20 @@
 #
-# Install Homebrew packages / npm correctly for OSX
+# Install nvm to manage node and npm
 #
 
 #!/bin/sh
 
 set -e
+
+# Install nvm to manage node versions
+brew update
+brew install nvm
+
+echo 'export NVM_DIR="$HOME/.nvm"' >> ~/.zshrc
+echo '. "/usr/local/opt/nvm/nvm.sh"' >> ~/.zshrc
+
+# install node and npm (LTS version)
+nvm install --lts node
 
 # npm default global packages
 packages=(

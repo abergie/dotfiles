@@ -36,7 +36,6 @@ binaries=(
   go
   graphicsmagick
   mercurial
-  node
   openssl
   python
   ruby
