@@ -142,7 +142,7 @@ echo "source $HOME/.git-completion.bash" >> ${ZDOTDIR:-$HOME}/.bashrc && echo "a
 echo ''
 echo "Installing VSTS CLI..."
 # prerequisites
-sudo apt-get install libssl-dev libffi-dev python-dev -y
+sudo apt-get install libssl-dev libffi-dev python3-dev build-essential -y
 curl -L https://aka.ms/install-vsts-cli | bash
 
 # Install azure-cli
