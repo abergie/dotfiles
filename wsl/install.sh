@@ -75,10 +75,10 @@ git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.zsh/zsh-sy
 # mv ~/.vim/colors/wombat/colors/* ~/.vim/colors/
 
 # # Midnight commander install
-# echo ''
-# echo "Installing Midnight commander..."
-# echo ''
-# sudo apt-get install mc -y
+echo ''
+echo "Installing Midnight commander..."
+echo ''
+sudo apt-get install mc -y
 
 # Install pyenv - https://github.com/pyenv/pyenv | https://github.com/pyenv/pyenv-installer
 echo ''
