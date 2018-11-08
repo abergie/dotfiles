@@ -13,8 +13,15 @@ Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-L
 
 # Download and install Ubuntu
 Write-Output "Downloading Ubuntu..."
-Invoke-WebRequest -Uri https://aka.ms/wsl-ubuntu-1604 -OutFile "$HOME\Ubuntu.zip" -UseBasicParsing
-Expand-Archive "$HOME\Ubuntu.zip" "$HOME\Ubuntu"
+# Invoke-WebRequest -Uri https://aka.ms/wsl-ubuntu-1604 -OutFile "$HOME\Ubuntu.zip" -UseBasicParsing
+# Expand-Archive "$HOME\Ubuntu.zip" "$HOME\Ubuntu"
+Invoke-WebRequest -Uri https://aka.ms/wsl-ubuntu-1804 -OutFile ~/Ubuntu.appx -UseBasicParsing
+Add-AppxPackage -Path ~/Ubuntu.appx
+RefreshEnv
+Ubuntu1804 install --root
+Ubuntu1804 run apt update
+Ubuntu1804 run apt upgrade -y
+
 
 # Install Chocolatey
 Write-Output "Installing Chocolatey..."

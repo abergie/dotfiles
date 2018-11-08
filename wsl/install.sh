@@ -28,20 +28,6 @@ if ! curl "$URL" --silent --output "$HOME/.git-completion.bash"; then
 	echo "ERROR: Couldn't download completion script. Make sure you have a working internet connection." && exit 1
 fi
 
-# oh-my-zsh install
-echo ''
-echo "Installing oh-my-zsh..."
-echo ''
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-
-# oh-my-zsh plugin install
-echo ''
-echo "Installing oh-my-zsh plugins..."
-echo ''
-git clone https://github.com/zsh-users/zsh-completions ~/.oh-my-zsh/custom/plugins/zsh-completions
-git clone git://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
-git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.zsh/zsh-syntax-highlighting
-
 # # powerlevel9k oh-my-zsh theme install
 # echo ''
 # echo "Installing powerlevel9k..."
@@ -138,6 +124,17 @@ echo ''
 echo "source $HOME/.git-completion.bash" >> ${ZDOTDIR:-$HOME}/.bashrc && echo "added git-completion to .bashrc..."	
 # fi
 
+# Install docker
+sudo apt-get update
+sudo apt-get install apt-transport-https ca-certificates curl software-properties-common -y
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+sudo add-apt-repository \
+   "deb [arch=amd64] https://download.docker.com/linux/ubuntu \
+   $(lsb_release -cs) \
+   stable"
+sudo apt-get update
+sudo apt-get install docker-ce -y
+
 # Install vsts-cli
 echo ''
 echo "Installing VSTS CLI..."
@@ -151,11 +148,9 @@ echo "Installing Azure CLI..."
 AZ_REPO=$(lsb_release -cs)
 echo "deb [arch=amd64] https://packages.microsoft.com/repos/azure-cli/ $AZ_REPO main" | \
     sudo tee /etc/apt/sources.list.d/azure-cli.list
-
-sudo apt-key adv --keyserver packages.microsoft.com --recv-keys 52E16F86FEE04B979B07E28DB02C46DF417A0893
-sudo apt-get install apt-transport-https
+curl -L https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
 sudo apt-get update
-sudo apt-get install azure-cli -y
+sudo apt-get install apt-transport-https azure-cli -y
 
 if [[ $? -eq 0 ]]
 then
@@ -164,15 +159,29 @@ else
     echo "[Warning] Azure CLI not installed successfully." >&2
 fi
 
-
-# Set default shell to zsh
+# oh-my-zsh install
 echo ''
-echo "Now setting default shell to zsh..."
-chsh -s $(which zsh)
+echo "Installing oh-my-zsh..."
+echo ''
+sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
 
-if [[ $? -eq 0 ]]
-then
-    echo "Successfully set your default shell to zsh..."
-else
-    echo "[Warning] Default shell not set successfully..." >&2
-fi
+# oh-my-zsh plugin install
+echo ''
+echo "Installing oh-my-zsh plugins..."
+echo ''
+git clone https://github.com/zsh-users/zsh-completions ~/.oh-my-zsh/custom/plugins/zsh-completions
+git clone git://github.com/zsh-users/zsh-autosuggestions ~/.zsh/zsh-autosuggestions
+git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ~/.zsh/zsh-syntax-highlighting
+
+
+# # Set default shell to zsh
+# echo ''
+# echo "Now setting default shell to zsh..."
+# chsh -s $(which zsh)
+
+# if [[ $? -eq 0 ]]
+# then
+#     echo "Successfully set your default shell to zsh..."
+# else
+#     echo "[Warning] Default shell not set successfully..." >&2
+# fi
