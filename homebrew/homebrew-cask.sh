@@ -9,35 +9,31 @@ set -e
 # Apps
 apps=(
   android-file-transfer
-  atom
-  avira-antivirus
-  betterzipql
   caffeine
-  dropbox
   docker
+  dropbox
   firefox
-  firefoxdeveloperedition
-  flash
   flux
+  font-clear-sans
+  font-hack
+  font-m-plus
+  font-roboto
   google-chrome
-  google-chrome-canary
-  google-drive
-  intellij-idea
+  handbrake
   iterm2
   keepassx
   keka
+  postman
   qlcolorcode
   qlmarkdown
   qlstephen
   quicklook-csv
   quicklook-json
-  postman
   skitch
-  skype
   slack
   spotify
-  sublime-text
   virtualbox
+  visual-studio-code
   vlc
   whatsapp
   zoomus
