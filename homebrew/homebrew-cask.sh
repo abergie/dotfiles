@@ -21,7 +21,7 @@ apps=(
   google-chrome
   handbrake
   iterm2
-  keepassx
+  keepassxc
   keka
   postman
   qlcolorcode
