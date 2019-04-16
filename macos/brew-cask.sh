@@ -32,6 +32,7 @@ apps=(
   skitch
   slack
   spotify
+  transmission
   virtualbox
   visual-studio-code
   vlc
