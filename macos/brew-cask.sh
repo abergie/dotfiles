@@ -23,6 +23,7 @@ apps=(
   iterm2
   keepassxc
   keka
+  keybase
   postman
   qlcolorcode
   qlmarkdown
