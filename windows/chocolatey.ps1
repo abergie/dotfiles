@@ -39,6 +39,7 @@ $packages = @(
     "hackfont"
     "jdk8"
     "keepassx"
+    "microsoftazurestorageexplorer"
     "packer"
     "postman"
     "python"
