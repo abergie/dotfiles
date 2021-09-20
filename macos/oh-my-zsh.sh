@@ -1,12 +1,4 @@
-#
-# Install oh-my-zsh
-# https://github.com/robbyrussell/oh-my-zsh
-#
-
 #!/bin/sh
 
-set -e
-
-sh -c "$(curl -fsSL https://raw.githubusercontent.com/robbyrussell/oh-my-zsh/master/tools/install.sh)"
-
-exit 0
+# Install oh-my-zsh
+sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
