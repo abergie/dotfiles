@@ -137,6 +137,7 @@ brew install --cask iterm2
 brew install --cask keka
 brew install --cask keybase
 brew install --cask microsoft-azure-storage-explorer
+brew install --cask microsoft-teams
 brew install --cask postman
 brew install --cask qlcolorcode
 brew install --cask qlmarkdown
