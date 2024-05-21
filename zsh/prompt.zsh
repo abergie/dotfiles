@@ -55,18 +55,19 @@ directory_name() {
 }
 
 battery_status() {
-  if test ! "$(uname)" = "Darwin"
-  then
-    exit 0
-  fi
+  exit 0
+  # if test ! "$(uname)" = "Darwin"
+  # then
+  #   exit 0
+  # fi
 
-  if [[ $(sysctl -n hw.model) == *"Book"* ]]
-  then
-    $ZSH/bin/battery-status
-  fi
+  # if [[ $(sysctl -n hw.model) == *"Mac"* ]]
+  # then
+  #   $ZSH/bin/battery-status
+  # fi
 }
 
-export PROMPT=$'\n$(battery_status)in $(directory_name) $(git_dirty)$(need_push)\n› '
+export PROMPT=$'\n$(battery_status)in $(directory_name) $(git_dirty)$(need_push)› '
 set_prompt () {
   export RPROMPT="%{$fg_bold[cyan]%}%{$reset_color%}"
 }
