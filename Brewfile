@@ -9,6 +9,7 @@ brew "ansible"
 brew "azcopy"
 brew "azure-cli"
 brew "colima", restart_service: true
+brew "coreutils"
 brew "docker"
 brew "docker-compose"
 brew "docker-credential-helper"
