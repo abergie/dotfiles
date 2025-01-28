@@ -8,7 +8,8 @@ brew "openssl@3"
 brew "ansible"
 brew "azcopy"
 brew "azure-cli"
-brew "colima", restart_service: true
+brew "certbot"
+brew "colima", restart_service: :changed
 brew "coreutils"
 brew "docker"
 brew "docker-buildx"
@@ -28,6 +29,7 @@ brew "nmap"
 brew "nvm"
 brew "openssh"
 brew "openvpn"
+brew "pkgconf"
 brew "plantuml"
 brew "pnpm"
 brew "pyenv"
@@ -44,6 +46,7 @@ brew "hashicorp/tap/terraform"
 cask "1password", args: { appdir: "/Applications" }
 cask "azure-data-studio", args: { appdir: "/Applications" }
 cask "caffeine", args: { appdir: "/Applications" }
+cask "cloudflare-warp"
 cask "dotnet-sdk", args: { appdir: "/Applications" }
 cask "firefox", args: { appdir: "/Applications" }
 cask "font-hack", args: { appdir: "/Applications" }
@@ -53,7 +56,6 @@ cask "iterm2", args: { appdir: "/Applications" }
 cask "keka"
 cask "microsoft-auto-update"
 cask "microsoft-azure-storage-explorer", args: { appdir: "/Applications" }
-cask "microsoft-remote-desktop", args: { appdir: "/Applications" }
 cask "microsoft-teams", args: { appdir: "/Applications" }
 cask "onedrive", args: { appdir: "/Applications" }
 cask "openvpn-connect", args: { appdir: "/Applications" }
@@ -62,6 +64,7 @@ cask "slack", args: { appdir: "/Applications" }
 cask "spotify", args: { appdir: "/Applications" }
 cask "visual-studio-code"
 cask "whatsapp", args: { appdir: "/Applications" }
+cask "windows-app"
 cask "yubico-yubikey-manager", args: { appdir: "/Applications" }
 cask "zoom", args: { appdir: "/Applications" }
 vscode "bencoleman.armview"
@@ -71,6 +74,7 @@ vscode "editorconfig.editorconfig"
 vscode "esbenp.prettier-vscode"
 vscode "github.copilot"
 vscode "github.copilot-chat"
+vscode "gitlab.gitlab-workflow"
 vscode "golang.go"
 vscode "hashicorp.terraform"
 vscode "heaths.vscode-guid"
@@ -79,6 +83,7 @@ vscode "k6.k6"
 vscode "ms-azure-devops.azure-pipelines"
 vscode "ms-azuretools.azure-dev"
 vscode "ms-azuretools.vscode-apimanagement"
+vscode "ms-azuretools.vscode-azure-github-copilot"
 vscode "ms-azuretools.vscode-azureappservice"
 vscode "ms-azuretools.vscode-azurecontainerapps"
 vscode "ms-azuretools.vscode-azurefunctions"
@@ -121,5 +126,6 @@ vscode "redhat.vscode-commons"
 vscode "redhat.vscode-xml"
 vscode "redhat.vscode-yaml"
 vscode "ryu1kn.partial-diff"
+vscode "saoudrizwan.claude-dev"
 vscode "vsciot-vscode.azure-iot-toolkit"
 vscode "wasp-lang.wasp"
