@@ -52,6 +52,7 @@ cask "firefox", args: { appdir: "/Applications" }
 cask "font-hack", args: { appdir: "/Applications" }
 cask "font-roboto", args: { appdir: "/Applications" }
 cask "google-chrome", args: { appdir: "/Applications" }
+cask "google-cloud-sdk"
 cask "iterm2", args: { appdir: "/Applications" }
 cask "keka"
 cask "microsoft-auto-update"
@@ -74,6 +75,7 @@ vscode "editorconfig.editorconfig"
 vscode "esbenp.prettier-vscode"
 vscode "github.copilot"
 vscode "github.copilot-chat"
+vscode "github.vscode-github-actions"
 vscode "gitlab.gitlab-workflow"
 vscode "golang.go"
 vscode "hashicorp.terraform"
@@ -81,6 +83,7 @@ vscode "heaths.vscode-guid"
 vscode "humao.rest-client"
 vscode "k6.k6"
 vscode "ms-azure-devops.azure-pipelines"
+vscode "ms-azure-load-testing.microsoft-testing"
 vscode "ms-azuretools.azure-dev"
 vscode "ms-azuretools.vscode-apimanagement"
 vscode "ms-azuretools.vscode-azure-github-copilot"
