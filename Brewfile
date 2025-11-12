@@ -2,8 +2,6 @@ tap "aquasecurity/trivy"
 tap "azure/functions"
 tap "azure/kubelogin"
 tap "hashicorp/tap"
-tap "homebrew/bundle"
-tap "homebrew/services"
 brew "openssl@3"
 brew "tree"
 brew "ansible"
@@ -21,6 +19,7 @@ brew "flux"
 brew "gh"
 brew "git"
 brew "glab"
+brew "gnu-sed"
 brew "helm"
 brew "jq"
 brew "k6"
@@ -46,7 +45,6 @@ brew "azure/functions/azure-functions-core-tools@4"
 brew "azure/kubelogin/kubelogin"
 brew "hashicorp/tap/terraform"
 cask "1password", args: { appdir: "/Applications" }
-cask "azure-data-studio", args: { appdir: "/Applications" }
 cask "caffeine", args: { appdir: "/Applications" }
 cask "cloudflare-warp"
 cask "dotnet-sdk", args: { appdir: "/Applications" }
@@ -68,6 +66,7 @@ cask "spotify", args: { appdir: "/Applications" }
 cask "visual-studio-code"
 cask "whatsapp", args: { appdir: "/Applications" }
 cask "windows-app"
+cask "yubico-authenticator"
 cask "yubico-yubikey-manager", args: { appdir: "/Applications" }
 cask "zoom", args: { appdir: "/Applications" }
 vscode "davidanson.vscode-markdownlint"
