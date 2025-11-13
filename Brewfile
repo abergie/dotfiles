@@ -53,11 +53,13 @@ cask "font-hack", args: { appdir: "/Applications" }
 cask "font-roboto", args: { appdir: "/Applications" }
 cask "gcloud-cli"
 cask "google-chrome", args: { appdir: "/Applications" }
+cask "google-drive"
 cask "iterm2", args: { appdir: "/Applications" }
 cask "keka"
 cask "microsoft-auto-update"
 cask "microsoft-azure-storage-explorer", args: { appdir: "/Applications" }
 cask "microsoft-teams", args: { appdir: "/Applications" }
+cask "obsidian"
 cask "onedrive", args: { appdir: "/Applications" }
 cask "openvpn-connect", args: { appdir: "/Applications" }
 cask "postman", args: { appdir: "/Applications" }
