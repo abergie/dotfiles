@@ -51,6 +51,7 @@ cask "1password", args: { appdir: "/Applications" }
 cask "balenaetcher"
 cask "caffeine", args: { appdir: "/Applications" }
 cask "cloudflare-warp"
+cask "copilot-cli"
 cask "dotnet-sdk", args: { appdir: "/Applications" }
 cask "firefox", args: { appdir: "/Applications" }
 cask "font-hack", args: { appdir: "/Applications" }
