@@ -53,6 +53,9 @@ brew update
 echo "› brew upgrade"
 brew upgrade
 
+echo "› brew cleanup"
+brew cleanup
+
 # Install software
 echo "› script/install"
 $ZSH/script/install
