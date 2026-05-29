@@ -70,6 +70,7 @@ brew "grafana/grafana/gcx"
 brew "hashicorp/tap/terraform"
 brew "oven-sh/bun/bun"
 cask "1password", args: { appdir: "/Applications" }
+cask "1password-cli"
 cask "balenaetcher"
 cask "caffeine", args: { appdir: "/Applications" }
 cask "claude-code"
