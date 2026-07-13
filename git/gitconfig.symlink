@@ -85,6 +85,7 @@
 # a matter of taste (uncomment if you dare)
 
 [core]
+	hooksPath = /Users/abergemann/.git-hooks
         # fsmonitor = true
         # untrackedCache = true
 [merge]

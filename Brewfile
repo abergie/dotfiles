@@ -1,3 +1,9 @@
+tap "anomalyco/tap"
+tap "aquasecurity/trivy"
+tap "azure/kubelogin"
+tap "grafana/grafana"
+tap "hashicorp/tap"
+tap "oven-sh/bun"
 # Run your GitHub Actions locally
 brew "act"
 # Cryptography and SSL/TLS Toolkit
@@ -66,6 +72,8 @@ brew "kubernetes-cli"
 brew "libpq"
 # LLM inference in C/C++
 brew "llama.cpp"
+# Sudoless performance monitoring for Apple Silicon processors
+brew "macmon"
 # Open-source, cross-platform JavaScript runtime environment
 brew "node"
 # MongoDB Shell to connect, configure, query, and work with your MongoDB database
@@ -112,11 +120,17 @@ brew "wget"
 brew "yarn"
 # UNIX shell (command interpreter)
 brew "zsh"
+# The AI coding agent built for the terminal.
 brew "anomalyco/tap/opencode", trusted: true
+# Scanner for vulnerabilities in container images, file systems, and Git repositories, as well as for configuration issues
 brew "aquasecurity/trivy/trivy", trusted: true
+# A Kubernetes credential (exec) plugin implementing azure authentication
 brew "azure/kubelogin/kubelogin", trusted: true
+# Grafana Cloud CLI
 brew "grafana/grafana/gcx", trusted: true
+# Terraform
 brew "hashicorp/tap/terraform", trusted: true
+# Incredibly fast JavaScript runtime, bundler, transpiler and package manager - all in one.
 brew "oven-sh/bun/bun", trusted: true
 # Password manager that keeps all passwords secure behind one password
 cask "1password", args: { appdir: "/Applications" }
