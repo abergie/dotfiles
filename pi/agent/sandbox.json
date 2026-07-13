@@ -16,7 +16,7 @@
     "deniedDomains": []
   },
   "filesystem": {
-    "denyRead": ["~/.ssh", "~/.aws", "~/.gnupg"],
+    "denyRead": ["~/.ssh", "~/.aws", "~/.azure", "~/.config/gcloud", "~/.gnupg"],
     "allowWrite": [".", "/tmp"],
     "denyWrite": [".env", ".env.*", "*.pem", "*.key"]
   }
