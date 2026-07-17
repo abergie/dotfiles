@@ -140,6 +140,19 @@ install_dotfiles () {
 setup_gitconfig
 install_dotfiles
 
+# Wire up pi coding agent configuration and extensions if pi is installed.
+if command -v pi >/dev/null 2>&1; then
+  info "configuring pi agent"
+  if "$DOTFILES_ROOT/pi/install.sh" | while read -r data; do info "$data"; done
+  then
+    success "pi agent configured"
+  else
+    fail "error configuring pi agent"
+  fi
+else
+  info "pi not installed, skipping pi agent configuration"
+fi
+
 # If we're on a Mac, let's install and setup homebrew.
 if [ "$(uname -s)" == "Darwin" ]
 then

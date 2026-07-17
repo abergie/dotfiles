@@ -1,3 +1,9 @@
+tap "anomalyco/tap"
+tap "aquasecurity/trivy"
+tap "azure/kubelogin"
+tap "grafana/grafana"
+tap "hashicorp/tap"
+tap "oven-sh/bun"
 # Run your GitHub Actions locally
 brew "act"
 # Cryptography and SSL/TLS Toolkit
@@ -10,8 +16,6 @@ brew "ansible"
 brew "azcopy"
 # Microsoft Azure CLI 2.0
 brew "azure-cli"
-# Memory upgrade for your coding agent
-brew "beads"
 # Tool to obtain certs from Let's Encrypt and autoenable HTTPS
 brew "certbot"
 # Prevent cloud misconfigurations during build-time for IaC tools
@@ -36,14 +40,14 @@ brew "ffmpeg"
 brew "flux"
 # Monitor a directory for changes and run a shell command
 brew "fswatch"
+# TIFF library and utilities
+brew "libtiff"
 # GitHub command-line tool
 brew "gh"
 # GIF image/animation creator/editor
 brew "gifsicle"
 # Distributed revision control system
 brew "git"
-# Open-source GitLab command-line tool
-brew "glab"
 # GNU implementation of the famous stream editor
 brew "gnu-sed"
 # Open source programming language to build simple/reliable/efficient software
@@ -56,8 +60,6 @@ brew "hf"
 brew "jq"
 # Modern load testing tool, using Go and JavaScript
 brew "k6"
-# Scanning your k8s clusters, diagnosing, and triaging issues in simple English
-brew "k8sgpt"
 # Build and deploy Go applications on Kubernetes
 brew "ko"
 # Kubernetes command-line interface
@@ -66,6 +68,8 @@ brew "kubernetes-cli"
 brew "libpq"
 # LLM inference in C/C++
 brew "llama.cpp"
+# Sudoless performance monitoring for Apple Silicon processors
+brew "macmon"
 # Open-source, cross-platform JavaScript runtime environment
 brew "node"
 # MongoDB Shell to connect, configure, query, and work with your MongoDB database
@@ -92,10 +96,10 @@ brew "pnpm"
 brew "postgresql@16"
 # Python version management
 brew "pyenv"
+# Interpreted, interactive, object-oriented programming language
+brew "python@3.13"
 # Easily detect and prevent bugs and anti-patterns in your codebase
 brew "semgrep"
-# Constrain, log and scan your MCP connections for security vulnerabilities
-brew "snyk-agent-scan"
 # Microsoft SQL Server command-line interface
 brew "sqlcmd"
 # Terminal multiplexer
@@ -112,11 +116,17 @@ brew "wget"
 brew "yarn"
 # UNIX shell (command interpreter)
 brew "zsh"
+# The AI coding agent built for the terminal.
 brew "anomalyco/tap/opencode", trusted: true
+# Scanner for vulnerabilities in container images, file systems, and Git repositories, as well as for configuration issues
 brew "aquasecurity/trivy/trivy", trusted: true
+# A Kubernetes credential (exec) plugin implementing azure authentication
 brew "azure/kubelogin/kubelogin", trusted: true
+# Grafana Cloud CLI
 brew "grafana/grafana/gcx", trusted: true
+# Terraform
 brew "hashicorp/tap/terraform", trusted: true
+# Incredibly fast JavaScript runtime, bundler, transpiler and package manager - all in one.
 brew "oven-sh/bun/bun", trusted: true
 # Password manager that keeps all passwords secure behind one password
 cask "1password", args: { appdir: "/Applications" }
@@ -128,8 +138,6 @@ cask "balenaetcher"
 cask "caffeine", args: { appdir: "/Applications" }
 # Terminal-based AI coding assistant
 cask "claude-code"
-# Free app that makes your Internet safer
-cask "cloudflare-warp"
 # Brings the power of Copilot coding agent directly to your terminal
 cask "copilot-cli"
 # Developer platform
@@ -170,12 +178,6 @@ cask "spotify", args: { appdir: "/Applications" }
 cask "visual-studio-code"
 # Native desktop client for WhatsApp
 cask "whatsapp", args: { appdir: "/Applications" }
-# Connect to Windows
-cask "windows-app"
-# Full-featured companion app to the YubiKey
-cask "yubico-authenticator"
-# Multiplayer code editor
-cask "zed"
 # Video communication and virtual meeting platform
 cask "zoom", args: { appdir: "/Applications" }
 vscode "bierner.markdown-mermaid"
@@ -224,10 +226,10 @@ vscode "ms-windows-ai-studio.windows-ai-studio"
 vscode "prisma.prisma"
 vscode "redhat.vscode-xml"
 vscode "redhat.vscode-yaml"
-vscode "rx5426.litellm-chat-for-vscode"
 vscode "ryu1kn.partial-diff"
 vscode "teamsdevapp.vscode-ai-foundry"
 vscode "tsandall.opa"
+vscode "vivswan.litellm-vscode-chat"
 go "golang.org/x/tools/gopls"
 go "honnef.co/go/tools/cmd/staticcheck"
 npm "corepack"
