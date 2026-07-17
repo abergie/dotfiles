@@ -11,13 +11,19 @@
       "github.com",
       "*.github.com",
       "api.github.com",
-      "raw.githubusercontent.com"
+      "raw.githubusercontent.com",
+      "developer.gradera.ai",
+      "*.developer.gradera.ai"
     ],
-    "deniedDomains": []
+    "deniedDomains": [],
+    "allowUnixSockets": [
+      "~/Library/Group Containers/2BUA8C4S2C.com.1password/t/agent.sock"
+    ]
   },
   "filesystem": {
-    "denyRead": ["~/.ssh", "~/.aws", "~/.azure", "~/.config/gcloud", "~/.gnupg", "~/.kube"],
+    "denyRead": ["~/.aws", "~/.azure", "~/.config/gcloud", "~/.gnupg", "~/.kube"],
     "allowWrite": [".", "/tmp"],
-    "denyWrite": [".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx"]
+    "denyWrite": [".env", ".env.*", "*.pem", "*.key", "*.p12", "*.pfx"],
+    "allowGitConfig": true
   }
 }
