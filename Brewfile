@@ -65,7 +65,7 @@ brew "ko"
 # Kubernetes command-line interface
 brew "kubernetes-cli"
 # Postgres C API library
-brew "libpq"
+brew "libpq", link: true
 # LLM inference in C/C++
 brew "llama.cpp"
 # Sudoless performance monitoring for Apple Silicon processors
@@ -114,6 +114,8 @@ brew "vim"
 brew "wget"
 # JavaScript package manager
 brew "yarn"
+# Process YAML, JSON, XML, CSV and properties documents from the CLI
+brew "yq"
 # UNIX shell (command interpreter)
 brew "zsh"
 # The AI coding agent built for the terminal.
