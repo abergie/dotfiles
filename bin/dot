@@ -54,7 +54,7 @@ brew update && brew upgrade --yes
 # The system is the source of truth; uninstalling a package requires updating
 # the Brewfile manually (or running this command after the uninstall).
 echo "› brew bundle dump"
-brew bundle dump --file "$ZSH/Brewfile" --force --describe
+brew bundle dump --file "$ZSH/Brewfile" --force
 
 # Install software and run topic installers.
 echo "› script/install"
