@@ -23,11 +23,8 @@ if [ -L "$PI_AGENT_DIR/AGENTS.md" ] || [ -f "$PI_AGENT_DIR/AGENTS.md" ]; then
 fi
 ln -sf "$DOTFILES_ROOT/pi/AGENTS.md" "$PI_AGENT_DIR/AGENTS.md"
 
-# sandbox.json global config
-ln -sf "$DOTFILES_ROOT/pi/agent/sandbox.json" "$PI_AGENT_DIR/extensions/sandbox.json"
-
 # extensions
-for ext in sandbox litellm; do
+for ext in litellm; do
   ext_src="$DOTFILES_ROOT/pi/agent/extensions/$ext"
   ext_dst="$PI_AGENT_DIR/extensions/$ext"
   if [ -e "$ext_src" ]; then
@@ -38,12 +35,5 @@ for ext in sandbox litellm; do
     echo "linked pi extension: $ext"
   fi
 done
-
-# install sandbox extension dependencies
-if [ -f "$PI_AGENT_DIR/extensions/sandbox/package.json" ]; then
-  echo "installing sandbox extension dependencies"
-  cd "$PI_AGENT_DIR/extensions/sandbox"
-  npm install
-fi
 
 echo "pi agent setup complete"
