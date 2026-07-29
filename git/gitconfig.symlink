@@ -37,10 +37,6 @@
 [diff "spaceman-diff"]
   command = /opt/homebrew/bin/spaceman-diff
 
-[init]
-	defaultBranch = main
-
-
 # Changes from chacon -> https://blog.gitbutler.com/how-git-core-devs-configure-git/
 # clearly makes git better
 
@@ -75,8 +71,6 @@
 [rerere]
         enabled = true
         autoupdate = true
-[core]
-        excludesfile = ~/.gitignore
 [rebase]
         autoSquash = true
         autoStash = true
@@ -84,8 +78,8 @@
 
 # a matter of taste (uncomment if you dare)
 
-[core]
-	hooksPath = /Users/abergemann/.git-hooks
+# [core]
+#	hooksPath = ~/.git-hooks
         # fsmonitor = true
         # untrackedCache = true
 [merge]

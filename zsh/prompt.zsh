@@ -55,16 +55,11 @@ directory_name() {
 }
 
 battery_status() {
-  exit 0
-  # if test ! "$(uname)" = "Darwin"
-  # then
-  #   exit 0
-  # fi
-
-  # if [[ $(sysctl -n hw.model) == *"Mac"* ]]
-  # then
-  #   $ZSH/bin/battery-status
-  # fi
+  # Battery status disabled — requires macOS and adds subshell overhead
+  # to every prompt render. Re-enable by uncommenting:
+  # if test ! "$(uname)" = "Darwin"; then return; fi
+  # $ZSH/bin/battery-status
+  return 0
 }
 
 export PROMPT=$'\n$(battery_status)in $(directory_name) $(git_dirty)$(need_push)› '
