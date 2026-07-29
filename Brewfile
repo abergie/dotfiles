@@ -76,6 +76,8 @@ brew "node"
 brew "mongosh"
 # Port scanning utility for large networks
 brew "nmap"
+# Capability-based sandbox shell for AI agents with OS-enforced isolation
+brew "nono"
 # Manage multiple Node.js versions
 brew "nvm"
 # Create, run, and share large language models (LLMs)
@@ -91,7 +93,7 @@ brew "pkgconf"
 # Draw UML diagrams
 brew "plantuml"
 # Fast, disk space efficient package manager
-brew "pnpm"
+brew "pnpm", link: false
 # Object-relational database system
 brew "postgresql@16"
 # Python version management
@@ -234,4 +236,5 @@ vscode "tsandall.opa"
 vscode "vivswan.litellm-vscode-chat"
 go "golang.org/x/tools/gopls"
 go "honnef.co/go/tools/cmd/staticcheck"
+uv "mlx-lm"
 npm "corepack"
