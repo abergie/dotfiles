@@ -40,19 +40,25 @@ done
 
 export ZSH=$HOME/.dotfiles
 
-# Set macOS defaults
-$ZSH/macos/set-defaults.sh
+# macOS defaults should only be set during bootstrap, not every update.
+# Run `script/bootstrap` to apply macOS defaults.
 
 # Install homebrew
 $ZSH/homebrew/install.sh 2>&1
 
-# Upgrade homebrew
+# Upgrade Homebrew packages before recording the current system state.
 echo "› brew upgrade"
 brew update && brew upgrade --yes
 
-# echo "› brew cleanup"
-# brew cleanup
+# Keep the Brewfile aligned with packages installed outside this repository.
+# The system is the source of truth; uninstalling a package requires updating
+# the Brewfile manually (or running this command after the uninstall).
+echo "› brew bundle dump"
+brew bundle dump --file "$ZSH/Brewfile" --force
 
-# Install software
+# Install software and run topic installers.
 echo "› script/install"
 $ZSH/script/install
+
+# echo "› brew cleanup"
+# brew cleanup
