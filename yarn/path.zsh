@@ -1,7 +1,9 @@
 # sup yarn
 # https://yarnpkg.com
 
-if (( $+commands[yarn] ))
+# Yarn 2+ removed `yarn global bin`; retain the Yarn Classic global binary path
+# without invoking Yarn during shell startup.
+if [[ -d "$HOME/.yarn/bin" ]]
 then
-  export PATH="$PATH:`yarn global bin`"
+  export PATH="$PATH:$HOME/.yarn/bin"
 fi
