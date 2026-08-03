@@ -76,6 +76,8 @@ brew "node"
 brew "mongosh"
 # Port scanning utility for large networks
 brew "nmap"
+# Open-source, cross-platform JavaScript runtime environment
+brew "node@22"
 # Capability-based sandbox shell for AI agents with OS-enforced isolation
 brew "nono"
 # Manage multiple Node.js versions
