@@ -76,12 +76,24 @@ export default async function (pi: ExtensionAPI) {
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: m.max_input_tokens ?? 128000,
         maxTokens: m.max_output_tokens ?? 4096,
-        ...(isReasoning && {
-          compat: {
+        compat: {
+          // Sends x-session-id (sessionAffinityFormat: "openrouter") with pi's
+          // real per-session UUID on every request. LiteLLM's session_id_hook
+          // proxy callback (platform-tools/litellm/deploy/bootstrap/
+          // session-id-hook-configmap.yaml) reads this header first, before
+          // falling back to a derived principal+client hash -- so this gives
+          // real per-conversation Langfuse session grouping instead of one
+          // long-lived session per (user, harness, workspace) tuple. Without
+          // this, pi never sends any session header by default (pi-ai's
+          // openai-completions API hardcodes sendSessionAffinityHeaders:
+          // false regardless of provider).
+          sendSessionAffinityHeaders: true,
+          sessionAffinityFormat: "openrouter" as const,
+          ...(isReasoning && {
             thinkingFormat: "deepseek" as const,
             maxTokensField: "max_tokens" as const,
-          },
-        }),
+          }),
+        },
       };
     }),
   });
