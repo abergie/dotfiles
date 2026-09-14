@@ -12,6 +12,8 @@ brew "openssl@3"
 brew "tree"
 # Automate deployment, configuration, and upgrading
 brew "ansible"
+# Official Amazon AWS command-line interface
+brew "awscli"
 # Azure Storage data transfer utility
 brew "azcopy"
 # Microsoft Azure CLI 2.0
@@ -116,6 +118,8 @@ brew "uv"
 brew "vim"
 # Internet file retriever
 brew "wget"
+# Tools for the WireGuard secure network tunnel
+brew "wireguard-tools"
 # JavaScript package manager
 brew "yarn"
 # Process YAML, JSON, XML, CSV and properties documents from the CLI
@@ -233,7 +237,6 @@ vscode "prisma.prisma"
 vscode "redhat.vscode-xml"
 vscode "redhat.vscode-yaml"
 vscode "ryu1kn.partial-diff"
-vscode "teamsdevapp.vscode-ai-foundry"
 vscode "tsandall.opa"
 vscode "vivswan.litellm-vscode-chat"
 go "golang.org/x/tools/gopls"

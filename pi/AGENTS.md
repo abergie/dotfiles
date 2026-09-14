@@ -4,17 +4,19 @@
 
 1. Never commit directly to `main`.
 2. Never push directly to `main`.
-3. Always create/use a non-main branch for any code change.
-4. Branch names must use a conventional prefix such as `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, or `test/` followed by a concise description (for example: `feat/pi-sandbox-extension`).
-5. Always open a Pull Request for all changes.
-6. If currently on `main`, stop and switch to a feature branch before editing, committing, or pushing.
+3. Never switch branches in the primary checkout. Keep the primary checkout on `main` (or the repo's default branch) and free of changes you made.
+4. Do all code changes in an isolated git worktree checked out to a feature branch, created from the repo root and placed under `.worktrees/`. A branch can be checked out in only one worktree at a time.
+5. Worktree/feature branch names must use a conventional prefix such as `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, or `test/` followed by a concise description (for example: `feat/pi-sandbox-extension`).
+6. Standard creation, from the repo root (ensure `.worktrees/` is gitignored first): `git worktree add -b <branch-name> .worktrees/<branch-name> origin/main`.
+7. Always open a Pull Request for all changes.
+8. If work is already running in a worktree, work in place — never create a worktree from a worktree.
 
 ## Enforcement Checklist (before commit)
 
-- Confirm current branch is not `main`.
-- Confirm current branch follows the `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, or `test/` naming convention.
+- Confirm the current directory is a linked worktree (`git rev-parse --absolute-git-dir` differs from the common git dir) and the primary checkout is still on `main` with no changes of yours.
+- Confirm the current worktree branch follows the `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`, or `test/` naming convention.
 - Confirm changes are scoped to task.
-- Commit only on feature branch.
+- Commit only inside the feature-branch worktree.
 - Push branch and open/update PR.
 
 ## Local Guardrails (Installed)
@@ -86,7 +88,8 @@ Explain the proposed action, why it is needed, and its likely impact.
 - Never discard or overwrite changes you did not create.
 - Review `git status` and `git diff` before making broad edits.
 - Do not amend existing commits.
-- Do not change branches or create worktrees unless requested.
+- Do not switch branches in the primary checkout or discard it — isolate work in a worktree per the Git Safety Rules above.
+- If no worktree isolation exists yet, create one (`.worktrees/`) before editing rather than committing on the primary checkout.
 
 ## Implementation
 
