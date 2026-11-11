@@ -1,1 +1,2 @@
 export EDITOR='code'
+export HOMEBREW_BUNDLE_DUMP_NO_NPM=1
