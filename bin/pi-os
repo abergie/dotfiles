@@ -3,15 +3,14 @@
 # pi-os -- launch Pi inside an NVIDIA OpenShell Apple Hypervisor MicroVM
 #
 # Mounts the active project directory (or common repository root when inside a
-# linked git worktree) into /sandbox/work via virtiofs and attaches the
-# 1Password-provisioned LiteLLM provider.
+# linked git worktree) into /sandbox/work via virtiofs and attaches one or more
+# 1Password Environment-backed OpenShell providers (default: openshell-pi-dev).
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 DOTFILES_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
-PROVIDER="${PI_OPENSHELL_PROVIDER:-litellm}"
 IMAGE="${PI_OPENSHELL_IMAGE:-pi-openshell:local}"
 POLICY_FILE="${PI_OPENSHELL_POLICY:-$DOTFILES_ROOT/pi/openshell/policy.yaml}"
 OP_READ_HELPER="$DOTFILES_ROOT/pi/openshell/op-read.sh"
@@ -19,6 +18,9 @@ SANDBOX_NAME=""
 KEEP_SANDBOX=0
 DRY_RUN=0
 RUN_SHELL=0
+
+OP_ENVS=()
+EXPLICIT_PROVIDERS=()
 
 usage() {
   cat <<'EOF'
@@ -28,22 +30,45 @@ Usage:
   pi-os [wrapper-options] [--] [pi-arguments...]
 
 Wrapper options:
-  --provider <name>   OpenShell provider to attach (default: litellm)
-  --image <ref>       Sandbox image reference (default: pi-openshell:local)
-  --name <name>       Explicit sandbox name (default: auto-generated)
-  --keep              Keep the sandbox after Pi exits (default: --no-keep)
-  --shell             Start an interactive bash shell instead of pi
-  --dry-run           Print the resolved openshell command without executing
-  -h, --help          Show this help message
+  -e, --op-env <name>    1Password Environment name; repeatable for stacking
+                         (default: $PI_OP_ENVS or $PI_OP_ENV or openshell-pi-dev)
+  -p, --provider <name>  Explicit OpenShell provider to attach; repeatable
+                         (default: derived from --op-env names)
+  --image <ref>          Sandbox image reference (default: pi-openshell:local)
+  --name <name>          Explicit sandbox name (default: auto-generated)
+  --keep                 Keep the sandbox after Pi exits (default: --no-keep)
+  --shell                Start an interactive bash shell instead of pi
+  --dry-run              Print the resolved openshell command without executing
+  -h, --help             Show this help message
 EOF
+}
+
+append_csv_or_val() {
+  local target_arr="$1" raw="$2" item
+  local IFS=','
+  for item in $raw; do
+    item="${item#" "}"
+    item="${item%" "}"
+    [ -n "$item" ] || continue
+    if [ "$target_arr" = "OP_ENVS" ]; then
+      OP_ENVS+=("$item")
+    else
+      EXPLICIT_PROVIDERS+=("$item")
+    fi
+  done
 }
 
 PI_ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    --provider)
-      [ "$#" -ge 2 ] || { echo "pi-os: --provider requires a value" >&2; exit 2; }
-      PROVIDER="$2"
+    -e|--op-env)
+      [ "$#" -ge 2 ] || { echo "pi-os: $1 requires a value" >&2; exit 2; }
+      append_csv_or_val OP_ENVS "$2"
+      shift 2
+      ;;
+    -p|--provider)
+      [ "$#" -ge 2 ] || { echo "pi-os: $1 requires a value" >&2; exit 2; }
+      append_csv_or_val EXPLICIT_PROVIDERS "$2"
       shift 2
       ;;
     --image)
@@ -83,6 +108,34 @@ while [ "$#" -gt 0 ]; do
       ;;
   esac
 done
+
+if [ "${#OP_ENVS[@]}" -eq 0 ]; then
+  RAW_ENV_DEFAULT="${PI_OP_ENVS:-${PI_OP_ENV:-openshell-pi-dev}}"
+  for tok in ${RAW_ENV_DEFAULT//,/ }; do
+    [ -n "$tok" ] && OP_ENVS+=("$tok")
+  done
+fi
+
+if [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ] && [ -n "${PI_OPENSHELL_PROVIDERS:-${PI_OPENSHELL_PROVIDER:-}}" ]; then
+  RAW_PROV_DEFAULT="${PI_OPENSHELL_PROVIDERS:-${PI_OPENSHELL_PROVIDER}}"
+  for tok in ${RAW_PROV_DEFAULT//,/ }; do
+    [ -n "$tok" ] && EXPLICIT_PROVIDERS+=("$tok")
+  done
+fi
+
+sanitize_provider_id() {
+  printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9-]+/-/g; s/^-+//; s/-+$//'
+}
+
+PROVIDERS=()
+if [ "${#EXPLICIT_PROVIDERS[@]}" -gt 0 ]; then
+  PROVIDERS+=("${EXPLICIT_PROVIDERS[@]}")
+else
+  for env_name in "${OP_ENVS[@]}"; do
+    pid="$(sanitize_provider_id "$env_name")"
+    [ -n "$pid" ] && PROVIDERS+=("$pid")
+  done
+fi
 
 PHYSICAL_CWD="$(pwd -P)"
 PHYSICAL_HOME="$(cd "$HOME" && pwd -P)"
@@ -157,9 +210,27 @@ print(json.dumps({
 }, separators=(",", ":")))
 ' "$MOUNT_SOURCE")"
 
-RESOLVED_BASE_URL="${LITELLM_BASE_URL:-}"
+normalize_base_url() {
+  python3 -c '
+import re, sys
+u = sys.argv[1].strip()
+if not u:
+    raise SystemExit(0)
+if not re.match(r"^https?://", u, re.I):
+    u = "https://" + u
+u = re.sub(r"/(v1/?)?$", "", u.rstrip("/"))
+print(u)
+' "$1"
+}
 
-if [ "$DRY_RUN" -eq 0 ]; then
+EXTRA_ENV_ARGS=()
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  if [ -n "${LITELLM_BASE_URL:-}" ]; then
+    NORM_URL="$(normalize_base_url "$LITELLM_BASE_URL")"
+    [ -n "$NORM_URL" ] && EXTRA_ENV_ARGS+=(--env "LITELLM_BASE_URL=$NORM_URL")
+  fi
+else
   if ! command -v openshell >/dev/null 2>&1; then
     echo "pi-os: openshell CLI not found on PATH" >&2
     exit 1
@@ -172,27 +243,104 @@ if [ "$DRY_RUN" -eq 0 ]; then
     exit 1
   fi
 
-  PROVIDER_JSON="$(openshell provider get "$PROVIDER" -o json 2>/dev/null || true)"
-  if [ -z "$PROVIDER_JSON" ]; then
-    echo "pi-os: OpenShell provider '$PROVIDER' is not configured on the gateway." >&2
-    echo "Connect your 1Password Environment to the '$PROVIDER' profile in 1Password Desktop" >&2
-    echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
-    exit 1
-  fi
+  PROVIDER_CONFIG_KEYS=""
+  RESOLVED_PROVIDERS=()
+  for idx in "${!PROVIDERS[@]}"; do
+    prov="${PROVIDERS[$idx]}"
+    pjson="$(openshell provider get "$prov" -o json 2>/dev/null || true)"
+    # Backward-compatible fallback: if single default openshell-pi-dev provider
+    # was connected under the generic name 'litellm', accept 'litellm'.
+    if [ -z "$pjson" ] && [ "${#PROVIDERS[@]}" -eq 1 ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ] && [ "$prov" = "openshell-pi-dev" ]; then
+      alt_json="$(openshell provider get litellm -o json 2>/dev/null || true)"
+      if [ -n "$alt_json" ]; then
+        prov="litellm"
+        pjson="$alt_json"
+      fi
+    fi
 
-  HAS_PROVIDER_URL="$(printf '%s' "$PROVIDER_JSON" | python3 -c '
+    if [ -z "$pjson" ]; then
+      echo "pi-os: OpenShell provider '$prov' is not configured on the gateway." >&2
+      echo "Connect your 1Password Environment to OpenShell provider '$prov' in 1Password Desktop" >&2
+      echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
+      exit 1
+    fi
+
+    RESOLVED_PROVIDERS+=("$prov")
+    pkeys="$(printf '%s' "$pjson" | python3 -c '
 import json, sys
 try:
     d = json.load(sys.stdin)
-    cfg = d.get("config") or d.get("config_keys") or {}
-    keys = cfg.keys() if isinstance(cfg, dict) else cfg
-    print("1" if "LITELLM_BASE_URL" in keys else "0")
+    for field in ("config", "config_keys", "credentials", "credential_keys"):
+        v = d.get(field) or {}
+        for k in (v.keys() if isinstance(v, dict) else v):
+            print(k)
 except Exception:
-    print("0")
+    pass
 ')"
+    if [ -n "$pkeys" ]; then
+      PROVIDER_CONFIG_KEYS="$PROVIDER_CONFIG_KEYS"$'\n'"$pkeys"
+    fi
+  done
+  PROVIDERS=("${RESOLVED_PROVIDERS[@]}")
 
-  if [ "$HAS_PROVIDER_URL" != "1" ] && [ -z "$RESOLVED_BASE_URL" ] && [ -x "$OP_READ_HELPER" ]; then
-    RESOLVED_BASE_URL="$("$OP_READ_HELPER" LITELLM_BASE_URL 2>/dev/null || true)"
+  # Merge non-concealed configuration variables across OP_ENVS (later env wins),
+  # plus fallback LITELLM_BASE_URL lookup if concealed in 1Password.
+  if [ -x "$OP_READ_HELPER" ]; then
+    RAW_CFG_STREAM=""
+    LAST_BASE_URL="${LITELLM_BASE_URL:-}"
+    for env_name in "${OP_ENVS[@]}"; do
+      env_cfg="$("$OP_READ_HELPER" --list-unconcealed --env "$env_name" 2>/dev/null || true)"
+      if [ -n "$env_cfg" ]; then
+        RAW_CFG_STREAM="$RAW_CFG_STREAM"$'\n'"$env_cfg"
+      fi
+      if [ -z "${LITELLM_BASE_URL:-}" ]; then
+        cand_url="$("$OP_READ_HELPER" --env "$env_name" LITELLM_BASE_URL 2>/dev/null || true)"
+        if [ -n "$cand_url" ]; then
+          LAST_BASE_URL="$cand_url"
+        fi
+      fi
+    done
+
+    MERGED_LINES="$(python3 -c '
+import re, sys
+prov_keys = set(k.strip() for k in sys.argv[1].splitlines() if k.strip())
+raw_lines = sys.argv[2].splitlines()
+explicit_url = sys.argv[3].strip()
+
+merged = {}
+for line in raw_lines:
+    if "=" not in line:
+        continue
+    k, v = line.split("=", 1)
+    if k in prov_keys:
+        continue
+    merged[k] = v
+
+if explicit_url and "LITELLM_BASE_URL" not in prov_keys:
+    merged["LITELLM_BASE_URL"] = explicit_url
+
+if "LITELLM_BASE_URL" in merged:
+    u = merged["LITELLM_BASE_URL"].strip()
+    if u and not re.match(r"^https?://", u, re.I):
+        u = "https://" + u
+    u = re.sub(r"/(v1/?)?$", "", u.rstrip("/"))
+    if u:
+        merged["LITELLM_BASE_URL"] = u
+    else:
+        del merged["LITELLM_BASE_URL"]
+
+for k, v in merged.items():
+    print(f"{k}={v}")
+' "$PROVIDER_CONFIG_KEYS" "$RAW_CFG_STREAM" "$LAST_BASE_URL")"
+
+    if [ -n "$MERGED_LINES" ]; then
+      while IFS= read -r kv; do
+        [ -n "$kv" ] && EXTRA_ENV_ARGS+=(--env "$kv")
+      done <<< "$MERGED_LINES"
+    fi
+  elif [ -n "${LITELLM_BASE_URL:-}" ]; then
+    NORM_URL="$(normalize_base_url "$LITELLM_BASE_URL")"
+    [ -n "$NORM_URL" ] && EXTRA_ENV_ARGS+=(--env "LITELLM_BASE_URL=$NORM_URL")
   fi
 fi
 
@@ -204,11 +352,13 @@ CMD+=(
   --no-auto-providers
   --from "$IMAGE"
   --policy "$POLICY_FILE"
-  --provider "$PROVIDER"
-  --driver-config-json "$DRIVER_JSON"
 )
-if [ -n "$RESOLVED_BASE_URL" ]; then
-  CMD+=(--env "LITELLM_BASE_URL=$RESOLVED_BASE_URL")
+for prov in "${PROVIDERS[@]}"; do
+  CMD+=(--provider "$prov")
+done
+CMD+=(--driver-config-json "$DRIVER_JSON")
+if [ "${#EXTRA_ENV_ARGS[@]}" -gt 0 ]; then
+  CMD+=("${EXTRA_ENV_ARGS[@]}")
 fi
 if [ -n "$SANDBOX_NAME" ]; then
   CMD+=(--name "$SANDBOX_NAME")
