@@ -1,4 +1,4 @@
-# Pi on NVIDIA OpenShell (macOS MicroVM + 1Password)
+# Pi on NVIDIA OpenShell (macOS MicroVM + 1Password Environments)
 
 Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), and `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
 
@@ -6,19 +6,44 @@ Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profil
 
 ## One-Time Setup
 
-### 1. Gateway and `litellm` profile
+### 1. Create 1Password Environment(s)
 
-`pi/openshell/install-tap.sh` pre-stages NVIDIA's macOS release tap, and `pi/openshell/install.sh` copies `gateway.toml` and `gateway.env` to `~/.config/openshell/`, reads `LITELLM_BASE_URL` from your environment or 1Password, and renders/imports the `litellm` provider profile into your local OpenShell gateway:
+1. In **1Password for Mac**, go to **Settings → Developer** and enable **Provision OpenShell providers**.
+2. Go to **Developer → View Environments → New environment**, name the default environment `openshell-pi-dev`, and add:
+   - `LITELLM_API_KEY` (secret)
+   - `LITELLM_BASE_URL` (e.g. `https://your-litellm-host.example.com`, set **Show value by default** so non-secret config reads require no secret reveal)
+3. Create additional Environments as needed (for example `openshell-pi-staging`, `openshell-pi-personal`, or service-specific Environments such as `github-work`).
+
+### 2. Sync gateway config and OpenShell provider profiles
+
+`pi/openshell/install.sh` stages `gateway.toml` and `gateway.env` into `~/.config/openshell/`, reads `LITELLM_BASE_URL` from each 1Password Environment, and imports/updates a matching OpenShell provider profile (`openshell-pi-dev`, etc., plus a `litellm` alias for the primary environment):
 
 ```sh
+# Default environment (openshell-pi-dev)
 ~/.dotfiles/pi/openshell/install.sh
-openshell gateway info
-openshell profile describe litellm
+
+# Sync multiple LiteLLM Environments at once
+~/.dotfiles/pi/openshell/install.sh --env openshell-pi-dev --env openshell-pi-staging
+# (or set PI_OP_ENVS="openshell-pi-dev,openshell-pi-staging" in ~/.localrc)
 ```
 
-To pin a specific 1Password account, vault, or item on machines with multiple accounts, set `OP_ACCOUNT`, `OP_VAULT`, or `OP_ITEM` in `~/.localrc`.
+### 3. Connect Environment(s) in 1Password Desktop
 
-### 2. Build the guest image
+For each Environment in **1Password Desktop → Developer → View Environments**:
+
+1. Click **Connect** next to **OpenShell provider**:
+   - **Provider name:** match the Environment name (for example `openshell-pi-dev`)
+   - **Profile:** **Existing profile** → select `openshell-pi-dev` (or create a custom profile for non-LiteLLM services like GitHub)
+   - **Secrets expire:** choose your desired TTL window
+2. Authorize the prompt and verify on the host:
+
+```sh
+openshell provider list
+```
+
+When a TTL expires, open the Environment in 1Password Desktop and choose **⋯ → Send again**.
+
+### 4. Build the guest image
 
 Colima/Docker is used only at build time to compile `Dockerfile.pi` into `pi-openshell:local`; runtime execution uses OpenShell's Apple Hypervisor VM driver:
 
@@ -26,40 +51,28 @@ Colima/Docker is used only at build time to compile `Dockerfile.pi` into `pi-ope
 ~/.dotfiles/pi/openshell/build-image.sh
 ```
 
-Re-run `build-image.sh` whenever `AGENTS.md`, extensions, or `PI_VERSION` change.
-
-### 3. Connect 1Password Environments (beta)
-
-1. In **1Password for Mac**, go to **Settings → Developer** and enable **Provision OpenShell providers**.
-2. Go to **Developer → View Environments → New environment**, name it (for example `pi-litellm`), and add `LITELLM_API_KEY` (secret) and `LITELLM_BASE_URL` (configuration).
-3. Inside that Environment, click **Connect** next to **OpenShell provider**:
-   - **Provider name:** `litellm`
-   - **Profile:** **Existing profile** → select `litellm`
-   - **Secrets expire:** choose your desired TTL window
-4. Authorize the prompt. Confirm OpenShell registered the provider:
-
-```sh
-openshell provider list
-```
-
-When the TTL expires, open the Environment in 1Password Desktop and choose **⋯ → Send again**.
-
 ## Daily Usage
 
-From any project directory or linked git worktree (`.worktrees/<branch>`):
-
 ```sh
+# Launch with default Environment (openshell-pi-dev)
 pi-os
+
+# Switch to another Environment for this session
+pi-os -e openshell-pi-staging
+PI_OP_ENV=openshell-pi-staging pi-os
+
+# Stack multiple Environments / providers into one MicroVM session
+# (later -e flags take precedence for non-secret config vars)
+pi-os -e openshell-pi-dev -e github-work
+
+# Or attach explicit OpenShell providers directly
+pi-os -p openshell-pi-dev -p custom-service
+
+# Inspect command, open a shell, or view logs
+pi-os --dry-run
+pi-os --shell
+openshell logs <name> --tail
+openshell term
 ```
 
-`pi-os` mounts the physical repository root at `/sandbox/work` over `virtiofs` (entering the matching worktree subdirectory automatically when run inside `.worktrees/`), populates `/tmp/pi-agent/mcp.json` from `LITELLM_BASE_URL`, and deletes the ephemeral MicroVM when Pi exits.
-
-Useful flags and inspection commands:
-
-```sh
-pi-os --dry-run              # Inspect the openshell sandbox create command
-pi-os --shell                # Open bash inside the MicroVM instead of pi
-pi-os --keep --name pi-dev   # Retain the sandbox after exit
-openshell logs <name> --tail # Stream allowed and blocked network events
-openshell term               # Interactive OpenShell TUI monitor
-```
+Host `pi` outside OpenShell honors the same `PI_OP_ENV` / `PI_OP_ENVS` variables (defaulting to `openshell-pi-dev`).

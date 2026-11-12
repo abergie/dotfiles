@@ -15,7 +15,9 @@ done
 if [ ! -e "$AGENT_DIR/mcp.json" ] && [ -n "${LITELLM_BASE_URL:-}" ]; then
   node -e '
     const fs = require("node:fs");
-    const base = process.argv[1].trim().replace(/\/+$/, "");
+    let base = process.argv[1].trim();
+    if (base && !/^https?:\/\//i.test(base)) base = "https://" + base;
+    base = base.replace(/\/+$/, "").replace(/\/v1$/i, "");
     const cfg = {
       mcpServers: {
         litellm: {

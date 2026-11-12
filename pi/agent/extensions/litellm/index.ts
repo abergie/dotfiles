@@ -1,6 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
 
+function normalizeBaseUrl(raw: string): string {
+  let url = raw.trim();
+  if (!url) return "";
+  if (!/^https?:\/\//i.test(url)) url = `https://${url}`;
+  return url.replace(/\/+$/, "").replace(/\/v1$/i, "");
+}
+
 function listOpAccounts(): string[] {
   const explicit = process.env.OP_ACCOUNT?.trim();
   if (explicit) return [explicit];
@@ -12,18 +19,63 @@ function listOpAccounts(): string[] {
     });
     const accounts = JSON.parse(raw) as Array<{ account_uuid?: string; url?: string }>;
     const ids = accounts.map((a) => a.account_uuid || a.url || "").filter(Boolean);
-    return ids.length > 0 ? ids : [""];
+    return ids.length > 0 ? ["" , ...ids] : [""];
   } catch {
     return [""];
   }
 }
 
+function readOpEnvironmentField(envName: string, field: string, accounts: string[]): string {
+  for (const account of accounts) {
+    for (const reveal of [false, true]) {
+      try {
+        const args = ["environment", "secret", "list", envName, "--format=json"];
+        if (reveal) args.push("--reveal");
+        if (account) args.push("--account", account);
+        const raw = execFileSync("op", args, {
+          encoding: "utf8",
+          stdio: ["ignore", "pipe", "ignore"],
+        });
+        const parsed = JSON.parse(raw) as
+          | Array<{ name?: string; value?: string; is_concealed?: boolean; concealed?: boolean; masked?: boolean }>
+          | { secrets?: Array<{ name?: string; value?: string; is_concealed?: boolean; concealed?: boolean; masked?: boolean }> };
+        const entries = Array.isArray(parsed) ? parsed : (parsed.secrets ?? []);
+        const match = entries.find((e) => e.name === field);
+        if (!match) break; // Environment found on this account, field absent
+        const concealed = Boolean(match.is_concealed || match.concealed || match.masked);
+        const val = (match.value ?? "").trim();
+        if (val && !val.startsWith("REPLACE_ME") && val !== "<concealed by 1Password>" && (!concealed || reveal)) {
+          return val;
+        }
+        if (!concealed) break;
+      } catch {
+        break; // Environment not found on this account; try next account
+      }
+    }
+  }
+  return "";
+}
+
 function readOpField(field: string): string {
+  const accounts = listOpAccounts();
+  const envRaw = process.env.PI_OP_ENVS?.trim() || process.env.PI_OP_ENV?.trim() || process.env.OP_ENV?.trim() || "openshell-pi-dev";
+  const envNames = envRaw
+    .split(/[\s,]+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  // Later environments override earlier ones when multiple are configured
+  for (let i = envNames.length - 1; i >= 0; i--) {
+    const val = readOpEnvironmentField(envNames[i], field, accounts);
+    if (val) return val;
+  }
+
+  // Fallback to legacy vault item when no Environment held the field
   const vault = process.env.OP_VAULT?.trim() || "Employee";
   const item = process.env.OP_ITEM?.trim() || "nono-pi-dev";
   const ref = `op://${vault}/${item}/${field}`;
 
-  for (const account of listOpAccounts()) {
+  for (const account of accounts) {
     try {
       const args = account ? ["read", "--account", account, ref] : ["read", ref];
       const value = execFileSync("op", args, {
@@ -34,17 +86,17 @@ function readOpField(field: string): string {
         return value;
       }
     } catch {
-      // Try next signed-in 1Password account when OP_ACCOUNT is unset.
+      // Try next signed-in 1Password account
     }
   }
   return "";
 }
 
 function readLiteLLMBaseUrl(): string {
-  const envUrl = process.env.LITELLM_BASE_URL?.trim();
+  const envUrl = normalizeBaseUrl(process.env.LITELLM_BASE_URL ?? "");
   if (envUrl) return envUrl;
 
-  return readOpField("LITELLM_BASE_URL") || "http://localhost:4000";
+  return normalizeBaseUrl(readOpField("LITELLM_BASE_URL")) || "http://localhost:4000";
 }
 
 // Prefer the environment variable; otherwise read the key from 1Password at startup.
