@@ -39,4 +39,14 @@ for ext in litellm worktree-status; do
   fi
 done
 
+NONO_HOOK_SRC="$DOTFILES_ROOT/pi/nono/hooks/nono-op-env.sh"
+NONO_HOOK_DST="$HOME/.config/nono/hooks/nono-op-env.sh"
+if [ -f "$NONO_HOOK_SRC" ]; then
+  mkdir -p "$(dirname "$NONO_HOOK_DST")"
+  if ! cmp -s "$NONO_HOOK_SRC" "$NONO_HOOK_DST" 2>/dev/null; then
+    install -m 0755 "$NONO_HOOK_SRC" "$NONO_HOOK_DST"
+    echo "installed nono hook: nono-op-env.sh"
+  fi
+fi
+
 echo "pi agent setup complete"

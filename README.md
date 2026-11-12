@@ -18,7 +18,7 @@ There's a few special files in the hierarchy.
   available everywhere.
 - **functions/**: Autoloaded Zsh functions and completion scripts (`_brew`,
   `c`, `extract`, `gf`, etc.).
-- **pi/**: Configuration (`AGENTS.md`), hooks, and custom extensions (`litellm`,
+- **pi/**: Configuration (`AGENTS.md`), nono session hooks, and custom extensions (`litellm`,
   `worktree-status`) symlinked into `~/.pi/agent` by `pi/install.sh`.
 - **topic/\*.zsh**: Any files ending in `.zsh` get loaded into your
   environment.
