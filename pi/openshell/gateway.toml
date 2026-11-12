@@ -1,0 +1,19 @@
+[openshell]
+version = 2
+
+[openshell.gateway]
+compute_driver = "vm"
+
+[openshell.drivers.vm]
+driver_dir        = "/opt/homebrew/opt/openshell/libexec"
+state_dir         = "/opt/homebrew/var/openshell/vm-driver"
+default_image     = "pi-openshell:local"
+bootstrap_image   = "nvcr.io/nvidia/base/ubuntu:24.04"
+vcpus             = 4
+mem_mib           = 8192
+overlay_disk_mib  = 8192
+allow_driver_config = true
+enable_bind_mounts  = true
+
+[openshell.drivers.vm.resource_admission]
+enabled = false

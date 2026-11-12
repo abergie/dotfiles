@@ -1,20 +1,43 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
 
-function readOpField(field: string): string {
+function listOpAccounts(): string[] {
+  const explicit = process.env.OP_ACCOUNT?.trim();
+  if (explicit) return [explicit];
+
   try {
-    const value = execFileSync(
-      "op",
-      ["read", "--account", "graderainc.1password.com", `op://Employee/nono-pi-dev/${field}`],
-      {
+    const raw = execFileSync("op", ["account", "list", "--format", "json"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    const accounts = JSON.parse(raw) as Array<{ account_uuid?: string; url?: string }>;
+    const ids = accounts.map((a) => a.account_uuid || a.url || "").filter(Boolean);
+    return ids.length > 0 ? ids : [""];
+  } catch {
+    return [""];
+  }
+}
+
+function readOpField(field: string): string {
+  const vault = process.env.OP_VAULT?.trim() || "Employee";
+  const item = process.env.OP_ITEM?.trim() || "nono-pi-dev";
+  const ref = `op://${vault}/${item}/${field}`;
+
+  for (const account of listOpAccounts()) {
+    try {
+      const args = account ? ["read", "--account", account, ref] : ["read", ref];
+      const value = execFileSync("op", args, {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
-      },
-    ).trim();
-    return value.startsWith("REPLACE_ME") ? "" : value;
-  } catch {
-    return "";
+      }).trim();
+      if (value && !value.startsWith("REPLACE_ME")) {
+        return value;
+      }
+    } catch {
+      // Try next signed-in 1Password account when OP_ACCOUNT is unset.
+    }
   }
+  return "";
 }
 
 function readLiteLLMBaseUrl(): string {
@@ -72,15 +95,9 @@ export default async function (pi: ExtensionAPI) {
         maxTokens: m.max_output_tokens ?? 4096,
         compat: {
           // Sends x-session-id (sessionAffinityFormat: "openrouter") with pi's
-          // real per-session UUID on every request. LiteLLM's session_id_hook
-          // proxy callback (platform-tools/litellm/deploy/bootstrap/
-          // session-id-hook-configmap.yaml) reads this header first, before
-          // falling back to a derived principal+client hash -- so this gives
-          // real per-conversation Langfuse session grouping instead of one
-          // long-lived session per (user, harness, workspace) tuple. Without
-          // this, pi never sends any session header by default (pi-ai's
-          // openai-completions API hardcodes sendSessionAffinityHeaders:
-          // false regardless of provider).
+          // real per-session UUID on every request so LiteLLM's session_id_hook
+          // callback groups Langfuse traces per conversation rather than falling
+          // back to a long-lived derived principal+client hash.
           sendSessionAffinityHeaders: true,
           sessionAffinityFormat: "openrouter" as const,
           ...(isReasoning && {

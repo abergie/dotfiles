@@ -1,0 +1,236 @@
+#!/usr/bin/env bash
+#
+# pi-os -- launch Pi inside an NVIDIA OpenShell Apple Hypervisor MicroVM
+#
+# Mounts the active project directory (or common repository root when inside a
+# linked git worktree) into /sandbox/work via virtiofs and attaches the
+# 1Password-provisioned LiteLLM provider.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+DOTFILES_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+PROVIDER="${PI_OPENSHELL_PROVIDER:-litellm}"
+IMAGE="${PI_OPENSHELL_IMAGE:-pi-openshell:local}"
+POLICY_FILE="${PI_OPENSHELL_POLICY:-$DOTFILES_ROOT/pi/openshell/policy.yaml}"
+OP_READ_HELPER="$DOTFILES_ROOT/pi/openshell/op-read.sh"
+SANDBOX_NAME=""
+KEEP_SANDBOX=0
+DRY_RUN=0
+RUN_SHELL=0
+
+usage() {
+  cat <<'EOF'
+pi-os -- run Pi inside an OpenShell Apple Hypervisor MicroVM
+
+Usage:
+  pi-os [wrapper-options] [--] [pi-arguments...]
+
+Wrapper options:
+  --provider <name>   OpenShell provider to attach (default: litellm)
+  --image <ref>       Sandbox image reference (default: pi-openshell:local)
+  --name <name>       Explicit sandbox name (default: auto-generated)
+  --keep              Keep the sandbox after Pi exits (default: --no-keep)
+  --shell             Start an interactive bash shell instead of pi
+  --dry-run           Print the resolved openshell command without executing
+  -h, --help          Show this help message
+EOF
+}
+
+PI_ARGS=()
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --provider)
+      [ "$#" -ge 2 ] || { echo "pi-os: --provider requires a value" >&2; exit 2; }
+      PROVIDER="$2"
+      shift 2
+      ;;
+    --image)
+      [ "$#" -ge 2 ] || { echo "pi-os: --image requires a value" >&2; exit 2; }
+      IMAGE="$2"
+      shift 2
+      ;;
+    --name)
+      [ "$#" -ge 2 ] || { echo "pi-os: --name requires a value" >&2; exit 2; }
+      SANDBOX_NAME="$2"
+      shift 2
+      ;;
+    --keep)
+      KEEP_SANDBOX=1
+      shift
+      ;;
+    --shell)
+      RUN_SHELL=1
+      shift
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --)
+      shift
+      PI_ARGS+=("$@")
+      break
+      ;;
+    *)
+      PI_ARGS+=("$1")
+      shift
+      ;;
+  esac
+done
+
+PHYSICAL_CWD="$(pwd -P)"
+PHYSICAL_HOME="$(cd "$HOME" && pwd -P)"
+
+is_denied_mount_path() {
+  local p="$1"
+  case "$p" in
+    /|/Users|/tmp|/private|/private/tmp|/private/var|/var|/etc|/usr|/System|"$PHYSICAL_HOME")
+      return 0
+      ;;
+    "$PHYSICAL_HOME/.ssh"|"$PHYSICAL_HOME/.ssh"/*|\
+    "$PHYSICAL_HOME/.gnupg"|"$PHYSICAL_HOME/.gnupg"/*|\
+    "$PHYSICAL_HOME/.aws"|"$PHYSICAL_HOME/.aws"/*|\
+    "$PHYSICAL_HOME/.azure"|"$PHYSICAL_HOME/.azure"/*|\
+    "$PHYSICAL_HOME/.kube"|"$PHYSICAL_HOME/.kube"/*|\
+    "$PHYSICAL_HOME/.config/op"|"$PHYSICAL_HOME/.config/op"/*|\
+    "$PHYSICAL_HOME/.config/gcloud"|"$PHYSICAL_HOME/.config/gcloud"/*|\
+    "$PHYSICAL_HOME/.pi"|"$PHYSICAL_HOME/.pi"/*)
+      return 0
+      ;;
+  esac
+  return 1
+}
+
+if is_denied_mount_path "$PHYSICAL_CWD"; then
+  echo "pi-os: refusing to mount '$PHYSICAL_CWD' into the sandbox VM; cd into a project directory first." >&2
+  exit 1
+fi
+
+MOUNT_SOURCE="$PHYSICAL_CWD"
+GUEST_WORKDIR="/sandbox/work"
+
+# When inside a git repository or linked worktree, mount the common repository
+# root (so linked worktree .git pointers resolve inside the VM) when the active
+# directory lives underneath that root.
+if git rev-parse --git-dir >/dev/null 2>&1; then
+  COMMON_GIT_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+  if [ -n "$COMMON_GIT_DIR" ] && [ "$(basename "$COMMON_GIT_DIR")" = ".git" ]; then
+    COMMON_ROOT="$(cd "$(dirname "$COMMON_GIT_DIR")" && pwd -P)"
+    if ! is_denied_mount_path "$COMMON_ROOT"; then
+      case "$PHYSICAL_CWD" in
+        "$COMMON_ROOT")
+          MOUNT_SOURCE="$COMMON_ROOT"
+          GUEST_WORKDIR="/sandbox/work"
+          ;;
+        "$COMMON_ROOT"/*)
+          REL_SUBPATH="${PHYSICAL_CWD#"$COMMON_ROOT"/}"
+          MOUNT_SOURCE="$COMMON_ROOT"
+          GUEST_WORKDIR="/sandbox/work/$REL_SUBPATH"
+          ;;
+      esac
+    fi
+  fi
+fi
+
+if [ ! -f "$POLICY_FILE" ]; then
+  echo "pi-os: sandbox policy file not found: $POLICY_FILE" >&2
+  exit 1
+fi
+
+DRIVER_JSON="$(python3 -c '
+import json, sys
+print(json.dumps({
+  "vm": {
+    "mounts": [{
+      "type": "bind",
+      "source": sys.argv[1],
+      "target": "/sandbox/work",
+      "read_only": False,
+    }]
+  }
+}, separators=(",", ":")))
+' "$MOUNT_SOURCE")"
+
+RESOLVED_BASE_URL="${LITELLM_BASE_URL:-}"
+
+if [ "$DRY_RUN" -eq 0 ]; then
+  if ! command -v openshell >/dev/null 2>&1; then
+    echo "pi-os: openshell CLI not found on PATH" >&2
+    exit 1
+  fi
+
+  if ! openshell gateway info >/dev/null 2>&1; then
+    echo "pi-os: OpenShell gateway is not reachable. Start it with:" >&2
+    echo "  brew services restart nvidia/openshell/openshell" >&2
+    echo "  openshell gateway add https://localhost:17670 --local --name openshell" >&2
+    exit 1
+  fi
+
+  PROVIDER_JSON="$(openshell provider get "$PROVIDER" -o json 2>/dev/null || true)"
+  if [ -z "$PROVIDER_JSON" ]; then
+    echo "pi-os: OpenShell provider '$PROVIDER' is not configured on the gateway." >&2
+    echo "Connect your 1Password Environment to the '$PROVIDER' profile in 1Password Desktop" >&2
+    echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
+    exit 1
+  fi
+
+  HAS_PROVIDER_URL="$(printf '%s' "$PROVIDER_JSON" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    cfg = d.get("config") or d.get("config_keys") or {}
+    keys = cfg.keys() if isinstance(cfg, dict) else cfg
+    print("1" if "LITELLM_BASE_URL" in keys else "0")
+except Exception:
+    print("0")
+')"
+
+  if [ "$HAS_PROVIDER_URL" != "1" ] && [ -z "$RESOLVED_BASE_URL" ] && [ -x "$OP_READ_HELPER" ]; then
+    RESOLVED_BASE_URL="$("$OP_READ_HELPER" LITELLM_BASE_URL 2>/dev/null || true)"
+  fi
+fi
+
+CMD=(openshell sandbox create)
+if [ "$KEEP_SANDBOX" -eq 0 ]; then
+  CMD+=(--no-keep)
+fi
+CMD+=(
+  --no-auto-providers
+  --from "$IMAGE"
+  --policy "$POLICY_FILE"
+  --provider "$PROVIDER"
+  --driver-config-json "$DRIVER_JSON"
+)
+if [ -n "$RESOLVED_BASE_URL" ]; then
+  CMD+=(--env "LITELLM_BASE_URL=$RESOLVED_BASE_URL")
+fi
+if [ -n "$SANDBOX_NAME" ]; then
+  CMD+=(--name "$SANDBOX_NAME")
+fi
+
+CMD+=(-- /usr/local/bin/pi-sandbox-init --workdir "$GUEST_WORKDIR")
+if [ "$RUN_SHELL" -eq 1 ]; then
+  CMD+=(bash)
+else
+  CMD+=(pi)
+  if [ "${#PI_ARGS[@]}" -gt 0 ]; then
+    CMD+=("${PI_ARGS[@]}")
+  fi
+fi
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  printf '%s' "${CMD[0]}"
+  for arg in "${CMD[@]:1}"; do
+    printf ' %s' "$arg"
+  done
+  printf '\n'
+  exit 0
+fi
+
+exec "${CMD[@]}"

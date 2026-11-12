@@ -1,0 +1,9 @@
+{
+  "packages": [
+    "npm:pi-subagents",
+    "npm:pi-ask-user"
+  ],
+  "theme": "dark",
+  "defaultProvider": "litellm",
+  "hideThinkingBlock": true
+}
