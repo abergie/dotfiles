@@ -32,7 +32,7 @@ Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profil
 For each Environment in **1Password Desktop → Developer → View Environments**:
 
 1. Click **Connect** next to **OpenShell provider**:
-   - **Provider name:** match the Environment name (for example `openshell-pi-dev`)
+   - **Provider name:** match the Environment name (for example `openshell-pi-dev`; 1Password prefixes it as `op-openshell-pi-dev`, which `pi-os` resolves automatically)
    - **Profile:** **Existing profile** → select `openshell-pi-dev` (or create a custom profile for non-LiteLLM services like GitHub)
    - **Secrets expire:** choose your desired TTL window
 2. Authorize the prompt and verify on the host:

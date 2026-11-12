@@ -248,20 +248,75 @@ else
   for idx in "${!PROVIDERS[@]}"; do
     prov="${PROVIDERS[$idx]}"
     pjson="$(openshell provider get "$prov" -o json 2>/dev/null || true)"
-    # Backward-compatible fallback: if single default openshell-pi-dev provider
-    # was connected under the generic name 'litellm', accept 'litellm'.
-    if [ -z "$pjson" ] && [ "${#PROVIDERS[@]}" -eq 1 ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ] && [ "$prov" = "openshell-pi-dev" ]; then
-      alt_json="$(openshell provider get litellm -o json 2>/dev/null || true)"
+
+    # 1Password Desktop prefixes provisioned OpenShell providers with 'op-'
+    # (for example 'op-openshell-pi-dev' for profile/environment 'openshell-pi-dev').
+    if [ -z "$pjson" ] && [[ "$prov" != op-* ]]; then
+      alt_json="$(openshell provider get "op-$prov" -o json 2>/dev/null || true)"
       if [ -n "$alt_json" ]; then
-        prov="litellm"
+        prov="op-$prov"
         pjson="$alt_json"
       fi
     fi
 
+    # Match a single provider on the gateway whose profile type equals $prov.
+    if [ -z "$pjson" ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ]; then
+      list_json="$(openshell provider list -o json 2>/dev/null || true)"
+      if [ -n "$list_json" ]; then
+        matched_name="$(printf '%s' "$list_json" | python3 -c '
+import json, sys
+target = sys.argv[1]
+try:
+    items = [p for p in (json.load(sys.stdin).get("providers") or []) if p.get("type") == target and p.get("name")]
+    if len(items) == 1:
+        print(items[0]["name"])
+except Exception:
+    pass
+' "$prov")"
+        if [ -n "$matched_name" ]; then
+          alt_json="$(openshell provider get "$matched_name" -o json 2>/dev/null || true)"
+          if [ -n "$alt_json" ]; then
+            prov="$matched_name"
+            pjson="$alt_json"
+          fi
+        fi
+      fi
+    fi
+
+    # Backward-compatible fallback: accept 'op-litellm' or 'litellm' for default env.
+    if [ -z "$pjson" ] && [ "${#PROVIDERS[@]}" -eq 1 ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ] && [ "${PROVIDERS[$idx]}" = "openshell-pi-dev" ]; then
+      for fallback_prov in op-litellm litellm; do
+        alt_json="$(openshell provider get "$fallback_prov" -o json 2>/dev/null || true)"
+        if [ -n "$alt_json" ]; then
+          prov="$fallback_prov"
+          pjson="$alt_json"
+          break
+        fi
+      done
+    fi
+
     if [ -z "$pjson" ]; then
-      echo "pi-os: OpenShell provider '$prov' is not configured on the gateway." >&2
-      echo "Connect your 1Password Environment to OpenShell provider '$prov' in 1Password Desktop" >&2
+      echo "pi-os: OpenShell provider '$prov' (or 'op-$prov') is not configured on the gateway." >&2
+      echo "Connect your 1Password Environment to OpenShell in 1Password Desktop" >&2
       echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
+      exit 1
+    fi
+
+    EXPIRED_KEY="$(printf '%s' "$pjson" | python3 -c '
+import json, sys, time
+now_ms = int(time.time() * 1000)
+try:
+    exp = json.load(sys.stdin).get("credential_expires_at_ms") or {}
+    for k, ts in exp.items():
+        if isinstance(ts, (int, float)) and 0 < ts <= now_ms:
+            print(k)
+            break
+except Exception:
+    pass
+')"
+    if [ -n "$EXPIRED_KEY" ]; then
+      echo "pi-os: 1Password credential '$EXPIRED_KEY' on provider '$prov' has expired." >&2
+      echo "Open 1Password Desktop -> Developer -> View Environments and choose '... -> Send again'." >&2
       exit 1
     fi
 
