@@ -1,22 +1,27 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { execFileSync } from "node:child_process";
 
-function readLiteLLMBaseUrl(): string {
-  const envUrl = process.env.LITELLM_BASE_URL?.trim();
-  if (envUrl) return envUrl;
-
+function readOpField(field: string): string {
   try {
-    return execFileSync(
+    const value = execFileSync(
       "op",
-      ["read", "--account", "graderainc.1password.com", "op://Employee/litellm-ab-gradera/url"],
+      ["read", "--account", "graderainc.1password.com", `op://Employee/nono-pi-dev/${field}`],
       {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       },
     ).trim();
+    return value.startsWith("REPLACE_ME") ? "" : value;
   } catch {
-    return "http://localhost:4000";
+    return "";
   }
+}
+
+function readLiteLLMBaseUrl(): string {
+  const envUrl = process.env.LITELLM_BASE_URL?.trim();
+  if (envUrl) return envUrl;
+
+  return readOpField("LITELLM_BASE_URL") || "http://localhost:4000";
 }
 
 // Prefer the environment variable; otherwise read the key from 1Password at startup.
@@ -24,18 +29,7 @@ function readLiteLLMApiKey(): string {
   const envKey = process.env.LITELLM_API_KEY?.trim();
   if (envKey) return envKey;
 
-  try {
-    return execFileSync(
-      "op",
-      ["read", "--account", "graderainc.1password.com", "op://Employee/litellm-ab-gradera/key"],
-      {
-        encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      },
-    ).trim();
-  } catch {
-    return "";
-  }
+  return readOpField("LITELLM_API_KEY");
 }
 
 export default async function (pi: ExtensionAPI) {
