@@ -133,10 +133,16 @@ if [ "${1:-}" = "gateway" ] && [ "${2:-}" = "info" ]; then
   exit 0
 fi
 if [ "${1:-}" = "provider" ] && [ "${2:-}" = "get" ]; then
-  if [ "${3:-}" = "openshell-pi-dev" ] || [ "${3:-}" = "openshell-pi-alt" ]; then
-    printf '{"name":"%s","config":{}}\n' "${3}"
-    exit 0
-  fi
+  case "${3:-}" in
+    op-openshell-pi-dev|op-openshell-pi-alt)
+      printf '{"name":"%s","type":"%s","config":{}}\n' "${3}" "${3#op-}"
+      exit 0
+      ;;
+    op-expired-env)
+      printf '{"name":"op-expired-env","type":"expired-env","credential_expires_at_ms":{"LITELLM_API_KEY":1000}}\n'
+      exit 0
+      ;;
+  esac
   echo "Error: provider not found" >&2
   exit 1
 fi
@@ -156,7 +162,14 @@ set -e
 assert_contains "$MISS_OUT" "1Password" "missing provider error references 1Password Environment setup"
 
 MERGE_OUT="$(cd "$PROJ_DIR" && env -u LITELLM_BASE_URL PATH="$SHIM_DIR:$PATH" "$PI_OS" -e openshell-pi-dev -e openshell-pi-alt)"
-assert_contains "$MERGE_OUT" "--provider openshell-pi-dev --provider openshell-pi-alt" "live stack attaches both providers"
+assert_contains "$MERGE_OUT" "--provider op-openshell-pi-dev --provider op-openshell-pi-alt" "live stack resolves 1Password op-<env> provider names"
+
+set +e
+EXP_OUT="$(cd "$PROJ_DIR" && PATH="$SHIM_DIR:$PATH" "$PI_OS" -e expired-env 2>&1)"
+EXP_RC=$?
+set -e
+[ "$EXP_RC" -ne 0 ] || { echo "FAIL: expected expired credential TTL check to exit non-zero" >&2; exit 1; }
+assert_contains "$EXP_OUT" "Send again" "expired TTL error tells user to Send again in 1Password"
 assert_contains "$MERGE_OUT" "--env LITELLM_BASE_URL=https://alt-llm.example.com" "later stacked env overrides and normalizes LITELLM_BASE_URL"
 assert_contains "$MERGE_OUT" "--env EXTRA_CFG=enabled" "unconcealed config from stacked env forwards to sandbox"
 
