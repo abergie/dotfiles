@@ -6,6 +6,8 @@ set -e
 
 cd "$(dirname $0)"/..
 
+./pi/openshell/install-tap.sh
+
 echo "› brew bundle"
 brew bundle
 

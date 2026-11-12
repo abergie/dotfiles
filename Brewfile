@@ -1,5 +1,6 @@
 tap "azure/kubelogin"
 tap "hashicorp/tap"
+tap "nvidia/openshell"
 # Run your GitHub Actions locally
 brew "act"
 # Display directories as trees (with optional color/HTML output)
@@ -28,6 +29,8 @@ brew "docker"
 brew "docker-buildx"
 # Isolated development environments using Docker
 brew "docker-compose"
+# Utilities for the ext2, ext3, and ext4 file systems (required by OpenShell MicroVM driver)
+brew "e2fsprogs"
 # Platform keystore credential helper for Docker
 brew "docker-credential-helper"
 # Play, record, convert, and stream select audio and video codecs
@@ -74,8 +77,8 @@ brew "nvm"
 brew "ollama", restart_service: :changed
 # AI coding agent, built for the terminal
 brew "opencode"
-# Safe, private runtime for autonomous AI agents
-brew "openshell"
+# Safe, private runtime for autonomous AI agents (Apple Hypervisor MicroVM build)
+brew "nvidia/openshell/openshell", restart_service: :changed, trusted: true
 # OpenBSD freely-licensed SSH connectivity tools
 brew "openssh"
 # Cryptography and SSL/TLS Toolkit

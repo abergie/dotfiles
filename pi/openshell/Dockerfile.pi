@@ -1,0 +1,39 @@
+FROM node:24-bookworm-slim
+
+ARG PI_VERSION=1.5.2
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    fd-find \
+    git \
+    ripgrep \
+  && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
+
+RUN mkdir -p /opt/pi-seed/extensions /opt/pi-seed/npm /sandbox/work \
+  && cd /opt/pi-seed/npm \
+  && npm init -y >/dev/null \
+  && npm install --no-audit --no-fund --ignore-scripts pi-subagents pi-ask-user \
+  && npm cache clean --force
+
+COPY pi/AGENTS.md /opt/pi-seed/AGENTS.md
+COPY pi/openshell/settings.json /opt/pi-seed/settings.json
+COPY pi/agent/extensions/litellm /opt/pi-seed/extensions/litellm
+COPY pi/agent/extensions/worktree-status /opt/pi-seed/extensions/worktree-status
+COPY pi/openshell/pi-sandbox-init.sh /usr/local/bin/pi-sandbox-init
+
+RUN chmod 0755 /usr/local/bin/pi-sandbox-init \
+  && chown -R node:node /opt/pi-seed /sandbox
+
+USER node
+WORKDIR /sandbox
+
+ENV PI_CODING_AGENT_DIR=/tmp/pi-agent \
+    PI_SKIP_VERSION_CHECK=1
+
+ENTRYPOINT ["/usr/local/bin/pi-sandbox-init"]
+CMD ["pi"]

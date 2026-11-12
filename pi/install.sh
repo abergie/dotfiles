@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
-# pi coding agent setup
+# pi coding agent host setup
 #
-# Symlinks pi agent config and extensions into ~/.pi/agent.
-# Skips entirely if pi is not installed or if everything is already linked.
+# Symlinks pi agent config and extensions into ~/.pi/agent for running pi
+# directly on the host or under nono, and stages the nono session hook.
+# OpenShell setup lives separately in pi/openshell/install.sh.
 
 set -e
 
