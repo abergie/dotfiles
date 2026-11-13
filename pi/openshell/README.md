@@ -13,7 +13,7 @@ Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profil
    - `LITELLM_API_KEY` (secret)
    - `LITELLM_BASE_URL` (e.g. `https://your-litellm-host.example.com`, set **Show value by default** so non-secret config reads require no secret reveal)
    - `GH_TOKEN` or `GITHUB_TOKEN` (secret; optional org-specific personal access token with repo/PR permissions)
-3. Create additional Environments as needed (for example `openshell-pi-staging`, `openshell-pi-client-a`, `openshell-pi-personal`). Each environment can store its own organization `GH_TOKEN` and `LITELLM_BASE_URL`.
+3. Create additional Environments as needed (for example `openshell-pi-staging`, `openshell-pi-client-a`, `openshell-pi-personal`). Each environment can store its own organization `GH_TOKEN`, `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, and `LITELLM_BASE_URL`.
 
 ### 2. Sync gateway config and OpenShell provider profiles
 
@@ -70,13 +70,13 @@ pi-os -e openshell-pi-dev -e github-work
 pi-os -p openshell-pi-dev -p custom-service
 
 # GitHub operations inside the sandbox:
+# - git commit (attributing GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL)
 # - git push (via https://github.com/...)
 # - gh pr create / gh pr list / gh api (via api.github.com)
-# Token resolution order for GH_TOKEN / GITHUB_TOKEN:
-# 1. Any attached 1Password OpenShell provider profile that declares GITHUB_TOKEN
-# 2. GH_TOKEN or GITHUB_TOKEN stored in the active 1Password Environment (-e <name>)
-# 3. Host GH_TOKEN / GITHUB_TOKEN environment variables
-# 4. Host 'gh auth token' (active host gh login)
+#
+# Identity & Token resolution order:
+# - Git author/committer: 1Password Environment (GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL) -> host git config (user.name / user.email)
+# - GitHub token: 1Password Environment (GH_TOKEN / GITHUB_TOKEN) -> host env -> host 'gh auth token'
 
 # Inspect command, open a shell, or view logs
 pi-os --dry-run
