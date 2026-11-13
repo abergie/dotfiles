@@ -302,6 +302,8 @@ for req in requested:
             raise SystemExit(0)
 
     resolved.append(cand["name"])
+    if cand.get("type"):
+        print("PTYPE:" + cand["type"])
     for field in ("config", "config_keys", "credentials", "credential_keys"):
         v = cand.get(field) or {}
         for k in (v.keys() if isinstance(v, dict) else v):
@@ -312,17 +314,17 @@ for k in sorted(keys):
     print("KEY:" + k)
 ' "$ALL_PROVIDERS_JSON" "$EXPLICIT_MODE" "${PROVIDERS[@]}")"
 
-  FIRST_LINE="${RESOLUTION_OUT%%$'\n'*}"
-  case "$FIRST_LINE" in
+  STATUS_LINE="$(printf '%s\n' "$RESOLUTION_OUT" | grep -E '^(MISSING|EXPIRED|OK):' | head -n 1)"
+  case "$STATUS_LINE" in
     MISSING:*)
-      MISS_PROV="${FIRST_LINE#MISSING:}"
+      MISS_PROV="${STATUS_LINE#MISSING:}"
       echo "pi-os: OpenShell provider '$MISS_PROV' (or 'op-$MISS_PROV') is not configured on the gateway." >&2
       echo "Connect your 1Password Environment to OpenShell in 1Password Desktop" >&2
       echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
       exit 1
       ;;
     EXPIRED:*)
-      REST="${FIRST_LINE#EXPIRED:}"
+      REST="${STATUS_LINE#EXPIRED:}"
       EXP_PROV="${REST%%:*}"
       EXP_KEY="${REST#*:}"
       echo "pi-os: 1Password credential '$EXP_KEY' on provider '$EXP_PROV' has expired." >&2
@@ -330,27 +332,57 @@ for k in sorted(keys):
       exit 1
       ;;
     OK:*)
-      RESOLVED_CSV="${FIRST_LINE#OK:}"
+      RESOLVED_CSV="${STATUS_LINE#OK:}"
       IFS=',' read -r -a PROVIDERS <<< "$RESOLVED_CSV"
       ;;
   esac
 
   PROVIDER_CONFIG_KEYS="$(printf '%s\n' "$RESOLUTION_OUT" | sed -n 's/^KEY://p')"
+  PROVIDER_TYPES="$(printf '%s\n' "$RESOLUTION_OUT" | sed -n 's/^PTYPE://p')"
+
+  # Derive LITELLM_BASE_URL from the attached inference_capable OpenShell profile(s)
+  # (later stacked provider takes precedence) before falling back to op CLI.
+  PROFILE_DERIVED_URL=""
+  if [ -z "${LITELLM_BASE_URL:-}" ] && [ -n "$PROVIDER_TYPES" ]; then
+    while IFS= read -r ptype; do
+      [ -n "$ptype" ] || continue
+      prof_json="$(openshell profile describe "$ptype" -o json 2>/dev/null || true)"
+      [ -n "$prof_json" ] || continue
+      cand_prof_url="$(printf '%s' "$prof_json" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+    if d.get("inference_capable"):
+        eps = d.get("endpoints") or []
+        if eps and eps[0].get("host"):
+            host = eps[0]["host"]
+            port = eps[0].get("port") or 443
+            scheme = "http" if port == 80 else "https"
+            default_port = 80 if scheme == "http" else 443
+            print(f"{scheme}://{host}" if port == default_port else f"{scheme}://{host}:{port}")
+except Exception:
+    pass
+')"
+      if [ -n "$cand_prof_url" ]; then
+        PROFILE_DERIVED_URL="$cand_prof_url"
+      fi
+    done <<< "$PROVIDER_TYPES"
+  fi
 
   # Merge non-concealed configuration variables across OP_ENVS (later env wins),
   # plus fallback LITELLM_BASE_URL lookup if concealed in 1Password.
   if [ -x "$OP_READ_HELPER" ]; then
     RAW_CFG_STREAM=""
-    LAST_BASE_URL="${LITELLM_BASE_URL:-}"
+    FALLBACK_BASE_URL="${PROFILE_DERIVED_URL:-}"
     for env_name in "${OP_ENVS[@]}"; do
       env_cfg="$("$OP_READ_HELPER" --list-unconcealed --env "$env_name" 2>/dev/null || true)"
       if [ -n "$env_cfg" ]; then
         RAW_CFG_STREAM="$RAW_CFG_STREAM"$'\n'"$env_cfg"
       fi
-      if [ -z "${LITELLM_BASE_URL:-}" ]; then
+      if [ -z "${LITELLM_BASE_URL:-}" ] && [ -z "$PROFILE_DERIVED_URL" ]; then
         cand_url="$("$OP_READ_HELPER" --env "$env_name" LITELLM_BASE_URL 2>/dev/null || true)"
         if [ -n "$cand_url" ]; then
-          LAST_BASE_URL="$cand_url"
+          FALLBACK_BASE_URL="$cand_url"
         fi
       fi
     done
@@ -359,9 +391,13 @@ for k in sorted(keys):
 import re, sys
 prov_keys = set(k.strip() for k in sys.argv[1].splitlines() if k.strip())
 raw_lines = sys.argv[2].splitlines()
-explicit_url = sys.argv[3].strip()
+caller_url = sys.argv[3].strip()
+fallback_url = sys.argv[4].strip()
 
 merged = {}
+if fallback_url and "LITELLM_BASE_URL" not in prov_keys:
+    merged["LITELLM_BASE_URL"] = fallback_url
+
 for line in raw_lines:
     if "=" not in line:
         continue
@@ -370,8 +406,8 @@ for line in raw_lines:
         continue
     merged[k] = v
 
-if explicit_url and "LITELLM_BASE_URL" not in prov_keys:
-    merged["LITELLM_BASE_URL"] = explicit_url
+if caller_url and "LITELLM_BASE_URL" not in prov_keys:
+    merged["LITELLM_BASE_URL"] = caller_url
 
 if "LITELLM_BASE_URL" in merged:
     u = merged["LITELLM_BASE_URL"].strip()
@@ -385,7 +421,7 @@ if "LITELLM_BASE_URL" in merged:
 
 for k, v in merged.items():
     print(f"{k}={v}")
-' "$PROVIDER_CONFIG_KEYS" "$RAW_CFG_STREAM" "$LAST_BASE_URL")"
+' "$PROVIDER_CONFIG_KEYS" "$RAW_CFG_STREAM" "${LITELLM_BASE_URL:-}" "$FALLBACK_BASE_URL")"
 
     if [ -n "$MERGED_LINES" ]; then
       while IFS= read -r kv; do
