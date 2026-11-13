@@ -225,10 +225,15 @@ print(u)
 
 EXTRA_ENV_ARGS=()
 
+EXPLICIT_ENV_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+
 if [ "$DRY_RUN" -eq 1 ]; then
   if [ -n "${LITELLM_BASE_URL:-}" ]; then
     NORM_URL="$(normalize_base_url "$LITELLM_BASE_URL")"
     [ -n "$NORM_URL" ] && EXTRA_ENV_ARGS+=(--env "LITELLM_BASE_URL=$NORM_URL")
+  fi
+  if [ -n "$EXPLICIT_ENV_GH_TOKEN" ]; then
+    EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$EXPLICIT_ENV_GH_TOKEN" --env "GITHUB_TOKEN=$EXPLICIT_ENV_GH_TOKEN")
   fi
 else
   if ! command -v openshell >/dev/null 2>&1; then
@@ -367,6 +372,39 @@ except Exception:
         PROFILE_DERIVED_URL="$cand_prof_url"
       fi
     done <<< "$PROVIDER_TYPES"
+  fi
+
+  # Resolve GH_TOKEN / GITHUB_TOKEN if not already supplied by an attached provider:
+  # 1. Check the active 1Password Environment(s) in reverse order (so stacked or switched -e envs provide org-specific tokens)
+  # 2. Fall back to host GH_TOKEN / GITHUB_TOKEN
+  # 3. Fall back to host 'gh auth token'
+  if [ -n "${PROVIDER_CONFIG_KEYS##*GH_TOKEN*}" ] && [ -n "${PROVIDER_CONFIG_KEYS##*GITHUB_TOKEN*}" ]; then
+    RESOLVED_GH_TOKEN=""
+    if [ -x "$OP_READ_HELPER" ]; then
+      for (( i=${#OP_ENVS[@]}-1; i>=0; i-- )); do
+        env_name="${OP_ENVS[i]}"
+        cand_token="$("$OP_READ_HELPER" --env "$env_name" GH_TOKEN 2>/dev/null || true)"
+        if [ -z "$cand_token" ]; then
+          cand_token="$("$OP_READ_HELPER" --env "$env_name" GITHUB_TOKEN 2>/dev/null || true)"
+        fi
+        if [ -n "$cand_token" ]; then
+          RESOLVED_GH_TOKEN="$cand_token"
+          break
+        fi
+      done
+    fi
+
+    if [ -z "$RESOLVED_GH_TOKEN" ] && [ -n "$EXPLICIT_ENV_GH_TOKEN" ]; then
+      RESOLVED_GH_TOKEN="$EXPLICIT_ENV_GH_TOKEN"
+    fi
+
+    if [ -z "$RESOLVED_GH_TOKEN" ] && command -v gh >/dev/null 2>&1; then
+      RESOLVED_GH_TOKEN="$(gh auth token 2>/dev/null || true)"
+    fi
+
+    if [ -n "$RESOLVED_GH_TOKEN" ]; then
+      EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$RESOLVED_GH_TOKEN" --env "GITHUB_TOKEN=$RESOLVED_GH_TOKEN")
+    fi
   fi
 
   # Merge non-concealed configuration variables across OP_ENVS (later env wins),

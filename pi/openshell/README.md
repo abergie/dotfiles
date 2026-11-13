@@ -1,6 +1,6 @@
 # Pi on NVIDIA OpenShell (macOS MicroVM + 1Password Environments)
 
-Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), and `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
+Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), while `git` and `gh` inside the VM can interact with `github.com` and `api.github.com` to push branches and create pull requests. `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
 
 Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profiles remain untouched so `pi`, `nono`, and `pi-os` can all run side by side.
 
@@ -12,7 +12,8 @@ Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profil
 2. Go to **Developer → View Environments → New environment**, name the default environment `openshell-pi-dev`, and add:
    - `LITELLM_API_KEY` (secret)
    - `LITELLM_BASE_URL` (e.g. `https://your-litellm-host.example.com`, set **Show value by default** so non-secret config reads require no secret reveal)
-3. Create additional Environments as needed (for example `openshell-pi-staging`, `openshell-pi-personal`, or service-specific Environments such as `github-work`).
+   - `GH_TOKEN` or `GITHUB_TOKEN` (secret; optional org-specific personal access token with repo/PR permissions)
+3. Create additional Environments as needed (for example `openshell-pi-staging`, `openshell-pi-client-a`, `openshell-pi-personal`). Each environment can store its own organization `GH_TOKEN` and `LITELLM_BASE_URL`.
 
 ### 2. Sync gateway config and OpenShell provider profiles
 
@@ -67,6 +68,15 @@ pi-os -e openshell-pi-dev -e github-work
 
 # Or attach explicit OpenShell providers directly
 pi-os -p openshell-pi-dev -p custom-service
+
+# GitHub operations inside the sandbox:
+# - git push (via https://github.com/...)
+# - gh pr create / gh pr list / gh api (via api.github.com)
+# Token resolution order for GH_TOKEN / GITHUB_TOKEN:
+# 1. Any attached 1Password OpenShell provider profile that declares GITHUB_TOKEN
+# 2. GH_TOKEN or GITHUB_TOKEN stored in the active 1Password Environment (-e <name>)
+# 3. Host GH_TOKEN / GITHUB_TOKEN environment variables
+# 4. Host 'gh auth token' (active host gh login)
 
 # Inspect command, open a shell, or view logs
 pi-os --dry-run

@@ -72,6 +72,27 @@ if [ "$OPENSHELL_CHANGED" -eq 1 ] && command -v brew >/dev/null 2>&1; then
   fi
 fi
 
+GH_PROFILE_SRC="$OPENSHELL_DIR/provider-github.yaml"
+if [ -f "$GH_PROFILE_SRC" ] && openshell gateway info >/dev/null 2>&1; then
+  GH_STAMP="$OPENSHELL_CONFIG_DIR/.profile-github.sha256"
+  GH_WANT_SHA="$(shasum -a 256 "$GH_PROFILE_SRC" | awk '{print $1}')"
+  GH_HAVE_SHA="$(cat "$GH_STAMP" 2>/dev/null || true)"
+  if ! openshell profile describe github >/dev/null 2>&1; then
+    openshell profile import -f "$GH_PROFILE_SRC" >/dev/null
+    printf '%s\n' "$GH_WANT_SHA" > "$GH_STAMP"
+    echo "imported openshell profile: github"
+  elif [ "$GH_WANT_SHA" != "$GH_HAVE_SHA" ]; then
+    GH_RVER="$(openshell profile export github | awk '/^resource_version:/ {print $2; exit}')"
+    GH_TMP="$(mktemp "${TMPDIR:-/tmp}/provider-github-upd.XXXXXX.yaml")"
+    chmod 0600 "$GH_TMP"
+    awk -v rver="$GH_RVER" 'NR==1 { print; print "resource_version: " rver; next } { print }' "$GH_PROFILE_SRC" > "$GH_TMP"
+    openshell profile update -f "$GH_TMP" github >/dev/null
+    rm -f "$GH_TMP"
+    printf '%s\n' "$GH_WANT_SHA" > "$GH_STAMP"
+    echo "updated openshell profile: github"
+  fi
+fi
+
 PROFILE_TMPL="$OPENSHELL_DIR/provider-litellm.yaml.tmpl"
 if [ ! -f "$PROFILE_TMPL" ]; then
   exit 0
