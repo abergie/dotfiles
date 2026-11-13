@@ -4,6 +4,9 @@ set -euo pipefail
 AGENT_DIR="${PI_CODING_AGENT_DIR:-/tmp/pi-agent}"
 export PI_CODING_AGENT_DIR="$AGENT_DIR"
 export PI_SKIP_VERSION_CHECK="${PI_SKIP_VERSION_CHECK:-1}"
+if [ -d "/sandbox/sessions" ] && [ -z "${PI_CODING_AGENT_SESSION_DIR:-}" ]; then
+  export PI_CODING_AGENT_SESSION_DIR="/sandbox/sessions"
+fi
 SEED_DIR="/opt/pi-seed"
 
 mkdir -p "$AGENT_DIR/extensions"

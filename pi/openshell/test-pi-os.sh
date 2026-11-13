@@ -31,6 +31,8 @@ assert_contains "$OUT1" "--from pi-openshell:local" "standard dry-run selects pi
 assert_contains "$OUT1" "--provider openshell-pi-dev" "default environment maps to --provider openshell-pi-dev"
 assert_contains "$OUT1" "\"source\":\"$REAL_PROJ_DIR\"" "standard dry-run mounts physical project dir"
 assert_contains "$OUT1" "\"target\":\"/sandbox/work\"" "standard dry-run mounts at /sandbox/work"
+assert_contains "$OUT1" "\"target\":\"/sandbox/sessions\"" "standard dry-run mounts /sandbox/sessions for persistent jsonl logs"
+assert_contains "$OUT1" "--env PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions" "sets PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions"
 assert_contains "$OUT1" "/usr/local/bin/pi-sandbox-init --workdir /sandbox/work pi --model qwen" "standard dry-run passes workdir and pi args"
 
 # 2. Switchable environment via --op-env / PI_OP_ENV

@@ -78,6 +78,12 @@ pi-os -p openshell-pi-dev -p custom-service
 # - Git author/committer: 1Password Environment (GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL) -> host git config (user.name / user.email)
 # - GitHub token: 1Password Environment (GH_TOKEN / GITHUB_TOKEN) -> host env -> host 'gh auth token'
 
+# Session persistence:
+# Sandbox .jsonl session files persist on the host under ~/.pi/agent/sessions/sandbox
+# (mounted at /sandbox/sessions via PI_CODING_AGENT_SESSION_DIR):
+pi-os -- -c                  # Continue the most recent sandbox session
+pi-os -- -r                  # Pick a past sandbox session to resume
+
 # Inspect command, open a shell, or view logs
 pi-os --dry-run
 pi-os --shell
