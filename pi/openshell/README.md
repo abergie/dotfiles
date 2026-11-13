@@ -1,6 +1,6 @@
 # Pi on NVIDIA OpenShell (macOS MicroVM + 1Password Environments)
 
-Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), and `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
+Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), while `git` and `gh` inside the VM can interact with `github.com` and `api.github.com` to push branches and create pull requests. `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
 
 Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profiles remain untouched so `pi`, `nono`, and `pi-os` can all run side by side.
 
@@ -67,6 +67,12 @@ pi-os -e openshell-pi-dev -e github-work
 
 # Or attach explicit OpenShell providers directly
 pi-os -p openshell-pi-dev -p custom-service
+
+# GitHub operations inside the sandbox:
+# - git push (via https://github.com/...)
+# - gh pr create / gh pr list / gh api (via api.github.com)
+# When GH_TOKEN or GITHUB_TOKEN is present on the host (or via gh auth token),
+# pi-os forwards it into the sandbox automatically.
 
 # Inspect command, open a shell, or view logs
 pi-os --dry-run

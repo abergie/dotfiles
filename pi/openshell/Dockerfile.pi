@@ -7,6 +7,7 @@ RUN apt-get update \
     bash \
     ca-certificates \
     fd-find \
+    gh \
     git \
     ripgrep \
   && ln -sf /usr/bin/fdfind /usr/local/bin/fd \
@@ -27,6 +28,8 @@ COPY pi/agent/extensions/worktree-status /opt/pi-seed/extensions/worktree-status
 COPY pi/openshell/pi-sandbox-init.sh /usr/local/bin/pi-sandbox-init
 
 RUN chmod 0755 /usr/local/bin/pi-sandbox-init \
+  && find /opt/pi-seed -type d -exec chmod 0755 {} + \
+  && find /opt/pi-seed -type f -exec chmod 0644 {} + \
   && chown -R node:node /opt/pi-seed /sandbox
 
 USER node

@@ -15,4 +15,43 @@ filesystem_policy:
     - /dev/null
     - /home/node
     - /sandbox/work
-network_policies: {}
+network_policies:
+  github_git_operations:
+    name: github-git-operations
+    endpoints:
+      - host: github.com
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        rules:
+          - allow:
+              method: GET
+              path: "/**"
+          - allow:
+              method: HEAD
+              path: "/**"
+          - allow:
+              method: OPTIONS
+              path: "/**"
+          - allow:
+              method: POST
+              path: "/**/git-upload-pack"
+          - allow:
+              method: POST
+              path: "/**/git-receive-pack"
+    binaries:
+      - path: /usr/bin/git
+      - path: /usr/local/bin/git
+
+  github_api_operations:
+    name: github-api-operations
+    endpoints:
+      - host: api.github.com
+        port: 443
+        protocol: rest
+        access: read-write
+        enforcement: enforce
+    binaries:
+      - path: /usr/bin/gh
+      - path: /usr/local/bin/gh
+      - path: /usr/local/bin/node
