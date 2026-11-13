@@ -133,18 +133,26 @@ if [ "${1:-}" = "gateway" ] && [ "${2:-}" = "info" ]; then
   exit 0
 fi
 if [ "${1:-}" = "provider" ] && [ "${2:-}" = "get" ]; then
-  case "${3:-}" in
-    op-openshell-pi-dev|op-openshell-pi-alt)
-      printf '{"name":"%s","type":"%s","config":{}}\n' "${3}" "${3#op-}"
-      exit 0
-      ;;
-    op-expired-env)
-      printf '{"name":"op-expired-env","type":"expired-env","credential_expires_at_ms":{"LITELLM_API_KEY":1000}}\n'
-      exit 0
-      ;;
-  esac
-  echo "Error: provider not found" >&2
+  for a in "$@"; do
+    if [ "$a" = "-o" ] || [ "$a" = "--output" ]; then
+      echo "error: unexpected argument '$a' found" >&2
+      exit 2
+    fi
+  done
   exit 1
+fi
+if [ "${1:-}" = "provider" ] && [ "${2:-}" = "list" ]; then
+  cat <<'JSON'
+{
+  "next_page_token": "",
+  "providers": [
+    {"name":"op-openshell-pi-dev","type":"openshell-pi-dev","credential_keys":["LITELLM_API_KEY"]},
+    {"name":"op-openshell-pi-alt","type":"openshell-pi-alt","credential_keys":["LITELLM_API_KEY"]},
+    {"name":"op-expired-env","type":"expired-env","credential_keys":["LITELLM_API_KEY"],"credential_expires_at_ms":{"LITELLM_API_KEY":1000}}
+  ]
+}
+JSON
+  exit 0
 fi
 if [ "${1:-}" = "sandbox" ] && [ "${2:-}" = "create" ]; then
   printf 'EXEC_SANDBOX:%s\n' "$*"

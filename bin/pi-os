@@ -243,100 +243,99 @@ else
     exit 1
   fi
 
-  PROVIDER_CONFIG_KEYS=""
-  RESOLVED_PROVIDERS=()
-  for idx in "${!PROVIDERS[@]}"; do
-    prov="${PROVIDERS[$idx]}"
-    pjson="$(openshell provider get "$prov" -o json 2>/dev/null || true)"
+  # Note: 'openshell provider get' has no -o json flag in OpenShell 0.1.x;
+  # query 'openshell provider list -o json' (metadata only, never secret values).
+  ALL_PROVIDERS_JSON="$(python3 -c '
+import json, subprocess, sys
 
-    # 1Password Desktop prefixes provisioned OpenShell providers with 'op-'
-    # (for example 'op-openshell-pi-dev' for profile/environment 'openshell-pi-dev').
-    if [ -z "$pjson" ] && [[ "$prov" != op-* ]]; then
-      alt_json="$(openshell provider get "op-$prov" -o json 2>/dev/null || true)"
-      if [ -n "$alt_json" ]; then
-        prov="op-$prov"
-        pjson="$alt_json"
-      fi
-    fi
+providers = []
+token = ""
+while True:
+    cmd = ["openshell", "provider", "list", "-o", "json"]
+    if token:
+        cmd.extend(["--page-token", token])
+    res = subprocess.run(cmd, capture_output=True, text=True)
+    if res.returncode != 0:
+        raise SystemExit(1)
+    payload = json.loads(res.stdout or "{}")
+    providers.extend(payload.get("providers") or [])
+    token = payload.get("next_page_token") or ""
+    if not token:
+        break
+print(json.dumps(providers))
+' 2>/dev/null || echo "[]")"
 
-    # Match a single provider on the gateway whose profile type equals $prov.
-    if [ -z "$pjson" ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ]; then
-      list_json="$(openshell provider list -o json 2>/dev/null || true)"
-      if [ -n "$list_json" ]; then
-        matched_name="$(printf '%s' "$list_json" | python3 -c '
-import json, sys
-target = sys.argv[1]
-try:
-    items = [p for p in (json.load(sys.stdin).get("providers") or []) if p.get("type") == target and p.get("name")]
-    if len(items) == 1:
-        print(items[0]["name"])
-except Exception:
-    pass
-' "$prov")"
-        if [ -n "$matched_name" ]; then
-          alt_json="$(openshell provider get "$matched_name" -o json 2>/dev/null || true)"
-          if [ -n "$alt_json" ]; then
-            prov="$matched_name"
-            pjson="$alt_json"
-          fi
-        fi
-      fi
-    fi
+  EXPLICIT_MODE=0
+  [ "${#EXPLICIT_PROVIDERS[@]}" -gt 0 ] && EXPLICIT_MODE=1
 
-    # Backward-compatible fallback: accept 'op-litellm' or 'litellm' for default env.
-    if [ -z "$pjson" ] && [ "${#PROVIDERS[@]}" -eq 1 ] && [ "${#EXPLICIT_PROVIDERS[@]}" -eq 0 ] && [ "${PROVIDERS[$idx]}" = "openshell-pi-dev" ]; then
-      for fallback_prov in op-litellm litellm; do
-        alt_json="$(openshell provider get "$fallback_prov" -o json 2>/dev/null || true)"
-        if [ -n "$alt_json" ]; then
-          prov="$fallback_prov"
-          pjson="$alt_json"
-          break
-        fi
-      done
-    fi
+  RESOLUTION_OUT="$(python3 -c '
+import json, sys, time
 
-    if [ -z "$pjson" ]; then
-      echo "pi-os: OpenShell provider '$prov' (or 'op-$prov') is not configured on the gateway." >&2
+providers = json.loads(sys.argv[1])
+explicit_mode = sys.argv[2] == "1"
+requested = sys.argv[3:]
+by_name = {p.get("name"): p for p in providers if p.get("name")}
+now_ms = int(time.time() * 1000)
+
+resolved = []
+keys = set()
+
+for req in requested:
+    cand = by_name.get(req)
+    if cand is None and not req.startswith("op-"):
+        cand = by_name.get(f"op-{req}")
+    if cand is None and not explicit_mode:
+        by_type = [p for p in providers if p.get("type") == req and p.get("name")]
+        if len(by_type) == 1:
+            cand = by_type[0]
+    if cand is None and not explicit_mode and len(requested) == 1 and req == "openshell-pi-dev":
+        cand = by_name.get("op-litellm") or by_name.get("litellm")
+
+    if cand is None:
+        print(f"MISSING:{req}")
+        raise SystemExit(0)
+
+    exp = cand.get("credential_expires_at_ms") or {}
+    for k, ts in exp.items():
+        if isinstance(ts, (int, float)) and 0 < ts <= now_ms:
+            print(f"EXPIRED:{cand["name"]}:{k}")
+            raise SystemExit(0)
+
+    resolved.append(cand["name"])
+    for field in ("config", "config_keys", "credentials", "credential_keys"):
+        v = cand.get(field) or {}
+        for k in (v.keys() if isinstance(v, dict) else v):
+            keys.add(k)
+
+print("OK:" + ",".join(resolved))
+for k in sorted(keys):
+    print("KEY:" + k)
+' "$ALL_PROVIDERS_JSON" "$EXPLICIT_MODE" "${PROVIDERS[@]}")"
+
+  FIRST_LINE="${RESOLUTION_OUT%%$'\n'*}"
+  case "$FIRST_LINE" in
+    MISSING:*)
+      MISS_PROV="${FIRST_LINE#MISSING:}"
+      echo "pi-os: OpenShell provider '$MISS_PROV' (or 'op-$MISS_PROV') is not configured on the gateway." >&2
       echo "Connect your 1Password Environment to OpenShell in 1Password Desktop" >&2
       echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
       exit 1
-    fi
-
-    EXPIRED_KEY="$(printf '%s' "$pjson" | python3 -c '
-import json, sys, time
-now_ms = int(time.time() * 1000)
-try:
-    exp = json.load(sys.stdin).get("credential_expires_at_ms") or {}
-    for k, ts in exp.items():
-        if isinstance(ts, (int, float)) and 0 < ts <= now_ms:
-            print(k)
-            break
-except Exception:
-    pass
-')"
-    if [ -n "$EXPIRED_KEY" ]; then
-      echo "pi-os: 1Password credential '$EXPIRED_KEY' on provider '$prov' has expired." >&2
+      ;;
+    EXPIRED:*)
+      REST="${FIRST_LINE#EXPIRED:}"
+      EXP_PROV="${REST%%:*}"
+      EXP_KEY="${REST#*:}"
+      echo "pi-os: 1Password credential '$EXP_KEY' on provider '$EXP_PROV' has expired." >&2
       echo "Open 1Password Desktop -> Developer -> View Environments and choose '... -> Send again'." >&2
       exit 1
-    fi
+      ;;
+    OK:*)
+      RESOLVED_CSV="${FIRST_LINE#OK:}"
+      IFS=',' read -r -a PROVIDERS <<< "$RESOLVED_CSV"
+      ;;
+  esac
 
-    RESOLVED_PROVIDERS+=("$prov")
-    pkeys="$(printf '%s' "$pjson" | python3 -c '
-import json, sys
-try:
-    d = json.load(sys.stdin)
-    for field in ("config", "config_keys", "credentials", "credential_keys"):
-        v = d.get(field) or {}
-        for k in (v.keys() if isinstance(v, dict) else v):
-            print(k)
-except Exception:
-    pass
-')"
-    if [ -n "$pkeys" ]; then
-      PROVIDER_CONFIG_KEYS="$PROVIDER_CONFIG_KEYS"$'\n'"$pkeys"
-    fi
-  done
-  PROVIDERS=("${RESOLVED_PROVIDERS[@]}")
+  PROVIDER_CONFIG_KEYS="$(printf '%s\n' "$RESOLUTION_OUT" | sed -n 's/^KEY://p')"
 
   # Merge non-concealed configuration variables across OP_ENVS (later env wins),
   # plus fallback LITELLM_BASE_URL lookup if concealed in 1Password.
