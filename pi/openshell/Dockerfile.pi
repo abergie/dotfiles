@@ -15,7 +15,7 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
-RUN mkdir -p /opt/pi-seed/extensions /opt/pi-seed/npm /sandbox/work \
+RUN mkdir -p /opt/pi-seed/extensions /opt/pi-seed/npm /sandbox/work /sandbox/sessions \
   && cd /opt/pi-seed/npm \
   && npm init -y >/dev/null \
   && npm install --no-audit --no-fund --ignore-scripts pi-subagents pi-ask-user \

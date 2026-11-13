@@ -15,6 +15,7 @@ filesystem_policy:
     - /dev/null
     - /home/node
     - /sandbox/work
+    - /sandbox/sessions
 network_policies:
   github_git_operations:
     name: github-git-operations
