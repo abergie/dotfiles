@@ -219,7 +219,17 @@ if [[ "$OUT_GH" == *"--env GH_TOKEN="* ]] || [[ "$OUT_GH" == *"--env GITHUB_TOKE
   exit 1
 fi
 
-# 12. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
+# 12. gateway.env resolves Colima DOCKER_HOST even before docker.sock exists (boot race)
+FAKE_COLIMA_HOME="$TMP_ROOT/fake-colima-home"
+mkdir -p "$FAKE_COLIMA_HOME/.colima/default"
+GATEWAY_ENV_OUT="$(env -u DOCKER_HOST HOME="$FAKE_COLIMA_HOME" sh -c '. "$1"; printf "%s" "${DOCKER_HOST:-}"' _ "$DOTFILES_ROOT/pi/openshell/gateway.env")"
+if [ ! -S /var/run/docker.sock ]; then
+  assert_contains "$GATEWAY_ENV_OUT" "unix://$FAKE_COLIMA_HOME/.colima/default/docker.sock" "gateway.env sets DOCKER_HOST when ~/.colima/default exists before docker.sock"
+fi
+GATEWAY_ENV_KEEP="$(DOCKER_HOST="unix:///custom/docker.sock" HOME="$FAKE_COLIMA_HOME" sh -c '. "$1"; printf "%s" "${DOCKER_HOST:-}"' _ "$DOTFILES_ROOT/pi/openshell/gateway.env")"
+assert_contains "$GATEWAY_ENV_KEEP" "unix:///custom/docker.sock" "gateway.env preserves explicit DOCKER_HOST"
+
+# 13. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
 if git -C "$DOTFILES_ROOT" grep -En "[A-Za-z0-9-]+\.1password\.com" -- pi/ bin/pi-os ':!pi/openshell/test-pi-os.sh'; then
   echo "FAIL: found hardcoded 1Password account domain in repository files" >&2
   exit 1
