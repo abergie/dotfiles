@@ -181,7 +181,10 @@ assert_contains "$EXP_OUT" "Send again" "expired TTL error tells user to Send ag
 assert_contains "$MERGE_OUT" "--env LITELLM_BASE_URL=https://alt-llm.example.com" "later stacked env overrides and normalizes LITELLM_BASE_URL"
 assert_contains "$MERGE_OUT" "--env EXTRA_CFG=enabled" "unconcealed config from stacked env forwards to sandbox"
 
-# 9. LITELLM_BASE_URL normalization in pi-sandbox-init.sh
+# 9. pi-sandbox-init.sh exports PI_CODING_AGENT_DIR when unset and normalizes LITELLM_BASE_URL
+CHILD_AGENT_DIR="$(env -u PI_CODING_AGENT_DIR "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" sh -c 'printf "%s" "${PI_CODING_AGENT_DIR:-}"')"
+assert_contains "$CHILD_AGENT_DIR" "/tmp/pi-agent" "pi-sandbox-init exports PI_CODING_AGENT_DIR=/tmp/pi-agent to child"
+
 FAKE_AGENT="$TMP_ROOT/fake-agent"
 PI_CODING_AGENT_DIR="$FAKE_AGENT" LITELLM_BASE_URL="https://litellm.example.com/v1/" \
   "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" true
