@@ -105,7 +105,11 @@ if [ "${1:-}" = "environment" ] && [ "${2:-}" = "secret" ] && [ "${3:-}" = "list
     fi
     exit 0
   elif [ "$ENV_NAME" = "openshell-pi-alt" ]; then
-    printf '[{"name":"LITELLM_BASE_URL","value":"alt-llm.example.com/v1","is_concealed":false},{"name":"EXTRA_CFG","value":"enabled","is_concealed":false},{"name":"SECRET_TOK","value":"","is_concealed":true}]\n'
+    if [ "$REVEAL" -eq 1 ]; then
+      printf '[{"name":"LITELLM_BASE_URL","value":"alt-llm.example.com/v1","is_concealed":false},{"name":"EXTRA_CFG","value":"enabled","is_concealed":false},{"name":"GH_TOKEN","value":"ghp_alt_org_token_456","is_concealed":true}]\n'
+    else
+      printf '[{"name":"LITELLM_BASE_URL","value":"alt-llm.example.com/v1","is_concealed":false},{"name":"EXTRA_CFG","value":"enabled","is_concealed":false},{"name":"GH_TOKEN","value":"","is_concealed":true}]\n'
+    fi
     exit 0
   fi
 fi
@@ -121,7 +125,7 @@ assert_contains "$VAL_KEY" "sk-dev-secret" "op-read retries with --reveal when f
 
 UNCONCEALED="$(PATH="$SHIM_DIR:$PATH" "$OP_READ" --list-unconcealed --env openshell-pi-alt)"
 assert_contains "$UNCONCEALED" "EXTRA_CFG=enabled" "--list-unconcealed emits non-concealed config"
-if [[ "$UNCONCEALED" == *"SECRET_TOK"* ]]; then
+if [[ "$UNCONCEALED" == *"ghp_alt_org_token_456"* ]]; then
   echo "FAIL: --list-unconcealed must never emit concealed secrets" >&2
   exit 1
 fi
@@ -169,7 +173,7 @@ set -e
 [ "$MISS_RC" -ne 0 ] || { echo "FAIL: expected missing provider check to exit non-zero" >&2; exit 1; }
 assert_contains "$MISS_OUT" "1Password" "missing provider error references 1Password Environment setup"
 
-MERGE_OUT="$(cd "$PROJ_DIR" && env -u LITELLM_BASE_URL PATH="$SHIM_DIR:$PATH" "$PI_OS" -e openshell-pi-dev -e openshell-pi-alt)"
+MERGE_OUT="$(cd "$PROJ_DIR" && env -u LITELLM_BASE_URL -u GH_TOKEN -u GITHUB_TOKEN PATH="$SHIM_DIR:$PATH" "$PI_OS" -e openshell-pi-dev -e openshell-pi-alt)"
 assert_contains "$MERGE_OUT" "--provider op-openshell-pi-dev --provider op-openshell-pi-alt" "live stack resolves 1Password op-<env> provider names"
 
 set +e
@@ -180,6 +184,8 @@ set -e
 assert_contains "$EXP_OUT" "Send again" "expired TTL error tells user to Send again in 1Password"
 assert_contains "$MERGE_OUT" "--env LITELLM_BASE_URL=https://alt-llm.example.com" "later stacked env overrides and normalizes LITELLM_BASE_URL"
 assert_contains "$MERGE_OUT" "--env EXTRA_CFG=enabled" "unconcealed config from stacked env forwards to sandbox"
+assert_contains "$MERGE_OUT" "--env GH_TOKEN=ghp_alt_org_token_456" "loads environment-specific GH_TOKEN from 1Password Environment"
+assert_contains "$MERGE_OUT" "--env GITHUB_TOKEN=ghp_alt_org_token_456" "mirrors GITHUB_TOKEN from 1Password Environment"
 
 # 9. pi-sandbox-init.sh exports PI_CODING_AGENT_DIR when unset and normalizes LITELLM_BASE_URL
 CHILD_AGENT_DIR="$(env -u PI_CODING_AGENT_DIR "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" sh -c 'printf "%s" "${PI_CODING_AGENT_DIR:-}"')"
