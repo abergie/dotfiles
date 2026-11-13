@@ -29,10 +29,10 @@ brew "docker"
 brew "docker-buildx"
 # Isolated development environments using Docker
 brew "docker-compose"
-# Utilities for the ext2, ext3, and ext4 file systems (required by OpenShell MicroVM driver)
-brew "e2fsprogs"
 # Platform keystore credential helper for Docker
 brew "docker-credential-helper"
+# Utilities for the ext2, ext3, and ext4 file systems
+brew "e2fsprogs"
 # Play, record, convert, and stream select audio and video codecs
 brew "ffmpeg"
 # Monitor a directory for changes and run a shell command
@@ -77,8 +77,6 @@ brew "nvm"
 brew "ollama", restart_service: :changed
 # AI coding agent, built for the terminal
 brew "opencode"
-# Safe, private runtime for autonomous AI agents (Apple Hypervisor MicroVM build)
-brew "nvidia/openshell/openshell", restart_service: :changed, trusted: true
 # OpenBSD freely-licensed SSH connectivity tools
 brew "openssh"
 # Cryptography and SSL/TLS Toolkit
@@ -125,6 +123,8 @@ brew "zsh"
 brew "azure/kubelogin/kubelogin", trusted: true
 # Terraform
 brew "hashicorp/tap/terraform", trusted: true
+# Safe, private runtime for autonomous AI agents
+brew "nvidia/openshell/openshell", trusted: true
 # Password manager that keeps all passwords secure behind one password
 cask "1password", args: { appdir: "/Applications" }
 # Command-line interface for 1Password

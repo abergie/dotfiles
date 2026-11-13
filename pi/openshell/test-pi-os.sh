@@ -197,15 +197,20 @@ if [[ "$MERGE_OUT" == *"--env GH_TOKEN="* ]] || [[ "$MERGE_OUT" == *"--env GITHU
 fi
 
 # 9. pi-sandbox-init.sh exports PI_CODING_AGENT_DIR when unset and normalizes LITELLM_BASE_URL
-CHILD_AGENT_DIR="$(env -u PI_CODING_AGENT_DIR "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" sh -c 'printf "%s" "${PI_CODING_AGENT_DIR:-}"')"
+# Use an isolated HOME so git config --global inside pi-sandbox-init never mutates host ~/.gitconfig.
+SANDBOX_INIT_HOME="$TMP_ROOT/sandbox-init-home"
+mkdir -p "$SANDBOX_INIT_HOME"
+CHILD_AGENT_DIR="$(env -u PI_CODING_AGENT_DIR HOME="$SANDBOX_INIT_HOME" "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" sh -c 'printf "%s" "${PI_CODING_AGENT_DIR:-}"')"
 assert_contains "$CHILD_AGENT_DIR" "/tmp/pi-agent" "pi-sandbox-init exports PI_CODING_AGENT_DIR=/tmp/pi-agent to child"
 
 FAKE_AGENT="$TMP_ROOT/fake-agent"
-PI_CODING_AGENT_DIR="$FAKE_AGENT" LITELLM_BASE_URL="https://litellm.example.com/v1/" \
+HOME="$SANDBOX_INIT_HOME" PI_CODING_AGENT_DIR="$FAKE_AGENT" LITELLM_BASE_URL="https://litellm.example.com/v1/" \
   "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" true
 MCP_CONTENT="$(cat "$FAKE_AGENT/mcp.json")"
 assert_contains "$MCP_CONTENT" "\"url\": \"https://litellm.example.com/mcp\"" "strips trailing /v1/ before appending /mcp"
 assert_contains "$MCP_CONTENT" 'Bearer ${LITELLM_API_KEY}' "keeps literal LITELLM_API_KEY placeholder expression in mcp.json"
+SANDBOX_GPGSIGN="$(HOME="$SANDBOX_INIT_HOME" git config --global --get commit.gpgsign || true)"
+assert_contains "$SANDBOX_GPGSIGN" "false" "pi-sandbox-init disables commit.gpgsign in isolated sandbox HOME"
 
 # 10. Forward Git identity into sandbox
 OUT_GIT="$(cd "$REPO_DIR" && git config user.name "Test Author" && git config user.email "author@example.com" && "$PI_OS" --dry-run)"
