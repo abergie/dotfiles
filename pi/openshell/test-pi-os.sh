@@ -160,6 +160,10 @@ if [ "${1:-}" = "provider" ] && [ "${2:-}" = "list" ]; then
 JSON
   exit 0
 fi
+if [ "${1:-}" = "provider" ] && ([ "${2:-}" = "create" ] || [ "${2:-}" = "update" ]); then
+  printf 'PROVIDER_SYNC:%s\n' "$*" >&2
+  exit 0
+fi
 if [ "${1:-}" = "sandbox" ] && [ "${2:-}" = "create" ]; then
   printf 'EXEC_SANDBOX:%s\n' "$*"
   exit 0
@@ -186,8 +190,11 @@ set -e
 assert_contains "$EXP_OUT" "Send again" "expired TTL error tells user to Send again in 1Password"
 assert_contains "$MERGE_OUT" "--env LITELLM_BASE_URL=https://alt-llm.example.com" "later stacked env overrides and normalizes LITELLM_BASE_URL"
 assert_contains "$MERGE_OUT" "--env EXTRA_CFG=enabled" "unconcealed config from stacked env forwards to sandbox"
-assert_contains "$MERGE_OUT" "--env GH_TOKEN=ghp_alt_org_token_456" "loads environment-specific GH_TOKEN from 1Password Environment"
-assert_contains "$MERGE_OUT" "--env GITHUB_TOKEN=ghp_alt_org_token_456" "mirrors GITHUB_TOKEN from 1Password Environment"
+assert_contains "$MERGE_OUT" "--provider github-openshell-pi-alt" "attaches per-env github provider instead of plain --env GH_TOKEN"
+if [[ "$MERGE_OUT" == *"--env GH_TOKEN="* ]] || [[ "$MERGE_OUT" == *"--env GITHUB_TOKEN="* ]]; then
+  echo "FAIL: must never pass raw GH_TOKEN or GITHUB_TOKEN as plain --env" >&2
+  exit 1
+fi
 
 # 9. pi-sandbox-init.sh exports PI_CODING_AGENT_DIR when unset and normalizes LITELLM_BASE_URL
 CHILD_AGENT_DIR="$(env -u PI_CODING_AGENT_DIR "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" sh -c 'printf "%s" "${PI_CODING_AGENT_DIR:-}"')"
@@ -205,10 +212,12 @@ OUT_GIT="$(cd "$REPO_DIR" && git config user.name "Test Author" && git config us
 assert_contains "$OUT_GIT" "--env GIT_AUTHOR_NAME=Test Author" "forwards GIT_AUTHOR_NAME into sandbox"
 assert_contains "$OUT_GIT" "--env GIT_AUTHOR_EMAIL=author@example.com" "forwards GIT_AUTHOR_EMAIL into sandbox"
 
-# 11. Forward GH_TOKEN / GITHUB_TOKEN into sandbox when present
+# 11. Never pass raw GH_TOKEN / GITHUB_TOKEN as plain --env even in dry-run
 OUT_GH="$(cd "$PROJ_DIR" && GH_TOKEN="gho_test_token_123" "$PI_OS" --dry-run)"
-assert_contains "$OUT_GH" "--env GH_TOKEN=gho_test_token_123" "forwards GH_TOKEN into sandbox"
-assert_contains "$OUT_GH" "--env GITHUB_TOKEN=gho_test_token_123" "forwards GITHUB_TOKEN into sandbox"
+if [[ "$OUT_GH" == *"--env GH_TOKEN="* ]] || [[ "$OUT_GH" == *"--env GITHUB_TOKEN="* ]]; then
+  echo "FAIL: dry-run must not emit raw GH_TOKEN as plain --env" >&2
+  exit 1
+fi
 
 # 12. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
 if git -C "$DOTFILES_ROOT" grep -En "[A-Za-z0-9-]+\.1password\.com" -- pi/ bin/pi-os ':!pi/openshell/test-pi-os.sh'; then
