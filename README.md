@@ -18,7 +18,7 @@ There's a few special files in the hierarchy.
   available everywhere.
 - **functions/**: Autoloaded Zsh functions and completion scripts (`_brew`,
   `c`, `extract`, `gf`, etc.).
-- **pi/**: Configuration (`AGENTS.md`), OpenShell MicroVM sandbox assets (`pi/openshell/`, launched via `bin/pi-os`), `nono` session hooks, and custom extensions (`litellm`, `worktree-status`) managed by `pi/install.sh`.
+- **pi/**: Configuration (`AGENTS.md`), OpenShell MicroVM sandbox assets (`pi/openshell/`, launched via `bin/pi-os`), `nono` session hooks, and custom extensions (`litellm`, `local-models`, `worktree-status`) managed by `pi/install.sh`.
 - **topic/\*.zsh**: Any files ending in `.zsh` get loaded into your
   environment.
 - **topic/path.zsh**: Any file named `path.zsh` is loaded first and is
