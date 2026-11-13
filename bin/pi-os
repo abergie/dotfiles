@@ -248,9 +248,6 @@ if [ "$DRY_RUN" -eq 1 ]; then
     NORM_URL="$(normalize_base_url "$LITELLM_BASE_URL")"
     [ -n "$NORM_URL" ] && EXTRA_ENV_ARGS+=(--env "LITELLM_BASE_URL=$NORM_URL")
   fi
-  if [ -n "$EXPLICIT_ENV_GH_TOKEN" ]; then
-    EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$EXPLICIT_ENV_GH_TOKEN" --env "GITHUB_TOKEN=$EXPLICIT_ENV_GH_TOKEN")
-  fi
   DRY_NAME="$(git config --get user.name 2>/dev/null || true)"
   DRY_EMAIL="$(git config --get user.email 2>/dev/null || true)"
   [ -n "$DRY_NAME" ] && EXTRA_ENV_ARGS+=(--env "GIT_AUTHOR_NAME=$DRY_NAME" --env "GIT_COMMITTER_NAME=$DRY_NAME")
@@ -394,12 +391,11 @@ except Exception:
     done <<< "$PROVIDER_TYPES"
   fi
 
-  # Resolve GH_TOKEN / GITHUB_TOKEN if not already supplied by an attached provider:
-  # 1. Check the active 1Password Environment(s) in reverse order (so stacked or switched -e envs provide org-specific tokens)
-  # 2. Fall back to host GH_TOKEN / GITHUB_TOKEN
-  # 3. Fall back to host 'gh auth token'
+  # Resolve GH_TOKEN / GITHUB_TOKEN into a scoped OpenShell 'github' provider so
+  # the real token never enters the sandbox as a plain environment variable.
   if [ -n "${PROVIDER_CONFIG_KEYS##*GH_TOKEN*}" ] && [ -n "${PROVIDER_CONFIG_KEYS##*GITHUB_TOKEN*}" ]; then
     RESOLVED_GH_TOKEN=""
+    GH_SOURCE_ENV="${OP_ENVS[${#OP_ENVS[@]}-1]:-default}"
     if [ -x "$OP_READ_HELPER" ]; then
       for (( i=${#OP_ENVS[@]}-1; i>=0; i-- )); do
         env_name="${OP_ENVS[i]}"
@@ -409,6 +405,7 @@ except Exception:
         fi
         if [ -n "$cand_token" ]; then
           RESOLVED_GH_TOKEN="$cand_token"
+          GH_SOURCE_ENV="$env_name"
           break
         fi
       done
@@ -423,7 +420,20 @@ except Exception:
     fi
 
     if [ -n "$RESOLVED_GH_TOKEN" ]; then
-      EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$RESOLVED_GH_TOKEN" --env "GITHUB_TOKEN=$RESOLVED_GH_TOKEN")
+      GH_PROVIDER_NAME="github-$(sanitize_provider_id "$GH_SOURCE_ENV")"
+      GH_PROVIDER_EXISTS="$(printf '%s' "$ALL_PROVIDERS_JSON" | python3 -c '
+import json, sys
+target = sys.argv[1]
+print("1" if any(p.get("name") == target for p in json.load(sys.stdin)) else "0")
+' "$GH_PROVIDER_NAME")"
+      if [ "$GH_PROVIDER_EXISTS" = "1" ]; then
+        GITHUB_TOKEN="$RESOLVED_GH_TOKEN" GH_TOKEN="$RESOLVED_GH_TOKEN" \
+          openshell provider update "$GH_PROVIDER_NAME" --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
+      else
+        GITHUB_TOKEN="$RESOLVED_GH_TOKEN" GH_TOKEN="$RESOLVED_GH_TOKEN" \
+          openshell provider create --name "$GH_PROVIDER_NAME" --type github --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
+      fi
+      PROVIDERS+=("$GH_PROVIDER_NAME")
     fi
   fi
 

@@ -28,6 +28,9 @@ fi
 if [ -n "${GIT_AUTHOR_EMAIL:-}" ]; then
   git config --global user.email "$GIT_AUTHOR_EMAIL" 2>/dev/null || true
 fi
+if [ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ] && command -v gh >/dev/null 2>&1; then
+  gh auth setup-git 2>/dev/null || true
+fi
 
 if [ ! -e "$AGENT_DIR/mcp.json" ] && [ -n "${LITELLM_BASE_URL:-}" ]; then
   node -e '
