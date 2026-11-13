@@ -32,7 +32,7 @@ mkdir -p "$PI_AGENT_DIR/extensions"
 
 setup_link "$DOTFILES_ROOT/pi/AGENTS.md" "$PI_AGENT_DIR/AGENTS.md" "AGENTS.md"
 
-for ext in litellm worktree-status; do
+for ext in litellm local-models worktree-status; do
   ext_src="$DOTFILES_ROOT/pi/agent/extensions/$ext"
   ext_dst="$PI_AGENT_DIR/extensions/$ext"
   if [ -e "$ext_src" ]; then
