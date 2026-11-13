@@ -198,12 +198,17 @@ MCP_CONTENT="$(cat "$FAKE_AGENT/mcp.json")"
 assert_contains "$MCP_CONTENT" "\"url\": \"https://litellm.example.com/mcp\"" "strips trailing /v1/ before appending /mcp"
 assert_contains "$MCP_CONTENT" 'Bearer ${LITELLM_API_KEY}' "keeps literal LITELLM_API_KEY placeholder expression in mcp.json"
 
-# 10. Forward GH_TOKEN / GITHUB_TOKEN into sandbox when present
+# 10. Forward Git identity into sandbox
+OUT_GIT="$(cd "$REPO_DIR" && git config user.name "Test Author" && git config user.email "author@example.com" && "$PI_OS" --dry-run)"
+assert_contains "$OUT_GIT" "--env GIT_AUTHOR_NAME=Test Author" "forwards GIT_AUTHOR_NAME into sandbox"
+assert_contains "$OUT_GIT" "--env GIT_AUTHOR_EMAIL=author@example.com" "forwards GIT_AUTHOR_EMAIL into sandbox"
+
+# 11. Forward GH_TOKEN / GITHUB_TOKEN into sandbox when present
 OUT_GH="$(cd "$PROJ_DIR" && GH_TOKEN="gho_test_token_123" "$PI_OS" --dry-run)"
 assert_contains "$OUT_GH" "--env GH_TOKEN=gho_test_token_123" "forwards GH_TOKEN into sandbox"
 assert_contains "$OUT_GH" "--env GITHUB_TOKEN=gho_test_token_123" "forwards GITHUB_TOKEN into sandbox"
 
-# 11. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
+# 12. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
 if git -C "$DOTFILES_ROOT" grep -En "[A-Za-z0-9-]+\.1password\.com" -- pi/ bin/pi-os ':!pi/openshell/test-pi-os.sh'; then
   echo "FAIL: found hardcoded 1Password account domain in repository files" >&2
   exit 1

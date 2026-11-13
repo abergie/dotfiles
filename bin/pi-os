@@ -235,6 +235,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
   if [ -n "$EXPLICIT_ENV_GH_TOKEN" ]; then
     EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$EXPLICIT_ENV_GH_TOKEN" --env "GITHUB_TOKEN=$EXPLICIT_ENV_GH_TOKEN")
   fi
+  DRY_NAME="$(git config --get user.name 2>/dev/null || true)"
+  DRY_EMAIL="$(git config --get user.email 2>/dev/null || true)"
+  [ -n "$DRY_NAME" ] && EXTRA_ENV_ARGS+=(--env "GIT_AUTHOR_NAME=$DRY_NAME" --env "GIT_COMMITTER_NAME=$DRY_NAME")
+  [ -n "$DRY_EMAIL" ] && EXTRA_ENV_ARGS+=(--env "GIT_AUTHOR_EMAIL=$DRY_EMAIL" --env "GIT_COMMITTER_EMAIL=$DRY_EMAIL")
 else
   if ! command -v openshell >/dev/null 2>&1; then
     echo "pi-os: openshell CLI not found on PATH" >&2
@@ -405,6 +409,37 @@ except Exception:
     if [ -n "$RESOLVED_GH_TOKEN" ]; then
       EXTRA_ENV_ARGS+=(--env "GH_TOKEN=$RESOLVED_GH_TOKEN" --env "GITHUB_TOKEN=$RESOLVED_GH_TOKEN")
     fi
+  fi
+
+  # Resolve Git author/committer identity:
+  # 1. Check 1Password Environment(s) for GIT_AUTHOR_NAME / GIT_AUTHOR_EMAIL / GIT_COMMITTER_NAME / GIT_COMMITTER_EMAIL
+  # 2. Fall back to host git config (user.name, user.email)
+  RESOLVED_GIT_NAME=""
+  RESOLVED_GIT_EMAIL=""
+
+  if [ -x "$OP_READ_HELPER" ]; then
+    for (( i=${#OP_ENVS[@]}-1; i>=0; i-- )); do
+      env_name="${OP_ENVS[i]}"
+      cand_name="$("$OP_READ_HELPER" --env "$env_name" GIT_AUTHOR_NAME 2>/dev/null || true)"
+      cand_email="$("$OP_READ_HELPER" --env "$env_name" GIT_AUTHOR_EMAIL 2>/dev/null || true)"
+      [ -n "$cand_name" ] && [ -z "$RESOLVED_GIT_NAME" ] && RESOLVED_GIT_NAME="$cand_name"
+      [ -n "$cand_email" ] && [ -z "$RESOLVED_GIT_EMAIL" ] && RESOLVED_GIT_EMAIL="$cand_email"
+      [ -n "$RESOLVED_GIT_NAME" ] && [ -n "$RESOLVED_GIT_EMAIL" ] && break
+    done
+  fi
+
+  if [ -z "$RESOLVED_GIT_NAME" ]; then
+    RESOLVED_GIT_NAME="$(git config --get user.name 2>/dev/null || true)"
+  fi
+  if [ -z "$RESOLVED_GIT_EMAIL" ]; then
+    RESOLVED_GIT_EMAIL="$(git config --get user.email 2>/dev/null || true)"
+  fi
+
+  if [ -n "$RESOLVED_GIT_NAME" ]; then
+    EXTRA_ENV_ARGS+=(--env "GIT_AUTHOR_NAME=$RESOLVED_GIT_NAME" --env "GIT_COMMITTER_NAME=$RESOLVED_GIT_NAME")
+  fi
+  if [ -n "$RESOLVED_GIT_EMAIL" ]; then
+    EXTRA_ENV_ARGS+=(--env "GIT_AUTHOR_EMAIL=$RESOLVED_GIT_EMAIL" --env "GIT_COMMITTER_EMAIL=$RESOLVED_GIT_EMAIL")
   fi
 
   # Merge non-concealed configuration variables across OP_ENVS (later env wins),
