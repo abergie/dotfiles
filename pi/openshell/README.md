@@ -1,6 +1,6 @@
-# Pi on NVIDIA OpenShell (macOS MicroVM + 1Password Environments)
+# Pi on NVIDIA OpenShell (Local MicroVM + Remote Gateways + 1Password Environments)
 
-Runs Pi inside a per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) with default-deny network egress. Only `/usr/local/bin/node` inside the VM can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), while `git` and `gh` inside the VM can interact with `github.com` and `api.github.com` to push branches and create pull requests. `LITELLM_API_KEY` is injected as an opaque placeholder resolved on the host by OpenShell's supervisor.
+Runs Pi inside either a local per-session Linux MicroVM on Apple `Hypervisor.framework` (`libkrun`) or a remote/cloud OpenShell gateway with default-deny network egress. Only `/usr/local/bin/node` inside the sandbox can reach the LiteLLM endpoint configured by `LITELLM_BASE_URL` (`/v1/*` inference and `/mcp` Streamable HTTP), while `git` and `gh` inside the sandbox can interact with `github.com` and `api.github.com` to push branches and create pull requests. `LITELLM_API_KEY` is injected as an opaque placeholder resolved by OpenShell's supervisor.
 
 Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profiles remain untouched so `pi`, `nono`, and `pi-os` can all run side by side.
 
@@ -17,15 +17,19 @@ Host `pi` (`~/.pi/agent`, managed by `pi/install.sh`) and existing `nono` profil
 
 ### 2. Sync gateway config and OpenShell provider profiles
 
-`pi/openshell/install.sh` stages `gateway.toml` and `gateway.env` into `~/.config/openshell/`, reads `LITELLM_BASE_URL` from each 1Password Environment, and imports/updates a matching OpenShell provider profile (`openshell-pi-dev`, etc., plus a `litellm` alias for the primary environment):
+`pi/openshell/install.sh` stages `gateway.toml` and `gateway.env` into `~/.config/openshell/`, ensures the local `openshell` gateway (`https://localhost:17670`) is registered without overwriting any active remote gateway selection, reads `LITELLM_BASE_URL` from each 1Password Environment, and imports/updates matching OpenShell provider profiles (`github`, `openshell-pi-dev`, etc., plus a `litellm` alias for the primary environment):
 
 ```sh
-# Default environment (openshell-pi-dev)
+# Default local gateway (openshell) and default environment (openshell-pi-dev)
 ~/.dotfiles/pi/openshell/install.sh
 
 # Sync multiple LiteLLM Environments at once
 ~/.dotfiles/pi/openshell/install.sh --env openshell-pi-dev --env openshell-pi-staging
 # (or set PI_OP_ENVS="openshell-pi-dev,openshell-pi-staging" in ~/.localrc)
+
+# Sync provider profiles to a remote/cloud OpenShell gateway (leaves local gateway config untouched)
+~/.dotfiles/pi/openshell/install.sh -g platform-tools
+~/.dotfiles/pi/openshell/install.sh --gateway-endpoint https://gateway.example.com
 ```
 
 ### 3. Connect Environment(s) in 1Password Desktop
@@ -46,17 +50,33 @@ When a TTL expires, open the Environment in 1Password Desktop and choose **â‹¯ â
 
 ### 4. Build the guest image
 
-Colima/Docker is used only at build time to compile `Dockerfile.pi` into `pi-openshell:local`; runtime execution uses OpenShell's Apple Hypervisor VM driver:
+Colima/Docker is used only at build time to compile `Dockerfile.pi` into `pi-openshell:local`, pre-seeding `pi-subagents`, `pi-ask-user`, and copying your local host `~/.pi/agent/git/github.com/EveryInc/compound-engineering-plugin` checkout into `/opt/pi-seed/git`; runtime execution uses OpenShell's Apple Hypervisor VM driver:
 
 ```sh
 ~/.dotfiles/pi/openshell/build-image.sh
+# Optional: override the local host Compound Engineering checkout path
+PI_COMPOUND_ENGINEERING_DIR=/path/to/compound-engineering-plugin ~/.dotfiles/pi/openshell/build-image.sh
 ```
 
 ## Daily Usage
 
 ```sh
-# Launch with default Environment (openshell-pi-dev)
+# Launch on the local 'openshell' MicroVM gateway with default Environment (openshell-pi-dev)
+# (works even when 'openshell gateway select' points at a remote gateway)
 pi-os
+
+# Target a remote/cloud OpenShell gateway (automatically omits local macOS VM bind mounts)
+pi-os -g platform-tools
+pi-os -g platform-tools --template pi-cloud
+pi-os -g platform-tools --image ghcr.io/your-org/pi-openshell:latest
+pi-os --gateway-endpoint https://gateway.example.com --no-policy
+
+# Or configure remote defaults via environment variables:
+#   PI_OPENSHELL_GATEWAY=platform-tools
+#   PI_OPENSHELL_REMOTE_IMAGE=ghcr.io/your-org/pi-openshell:latest
+#   PI_OPENSHELL_REMOTE_TEMPLATE=pi-cloud
+# Override back to the local VM gateway at any time with:
+pi-os --local
 
 # Switch to another Environment for this session
 pi-os -e openshell-pi-staging

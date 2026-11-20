@@ -15,7 +15,7 @@ RUN apt-get update \
 
 RUN npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@${PI_VERSION}"
 
-RUN mkdir -p /opt/pi-seed/extensions /opt/pi-seed/npm /sandbox/work /sandbox/sessions \
+RUN mkdir -p /opt/pi-seed/extensions /opt/pi-seed/npm /opt/pi-seed/git/github.com/EveryInc /sandbox/work /sandbox/sessions \
   && cd /opt/pi-seed/npm \
   && npm init -y >/dev/null \
   && npm install --no-audit --no-fund --ignore-scripts pi-subagents pi-ask-user \
@@ -25,11 +25,19 @@ COPY pi/AGENTS.md /opt/pi-seed/AGENTS.md
 COPY pi/openshell/settings.json /opt/pi-seed/settings.json
 COPY pi/agent/extensions/litellm /opt/pi-seed/extensions/litellm
 COPY pi/agent/extensions/worktree-status /opt/pi-seed/extensions/worktree-status
+COPY pi-seed/git/github.com/EveryInc/compound-engineering-plugin /opt/pi-seed/git/github.com/EveryInc/compound-engineering-plugin
 COPY pi/openshell/pi-sandbox-init.sh /usr/local/bin/pi-sandbox-init
 
+RUN printf '*\n!.gitignore\n' > /opt/pi-seed/git/.gitignore \
+  && if [ -f /opt/pi-seed/git/github.com/EveryInc/compound-engineering-plugin/package.json ] \
+       && node -e 'const d = require(process.argv[1]).dependencies || {}; process.exit(Object.keys(d).length > 0 ? 0 : 1);' /opt/pi-seed/git/github.com/EveryInc/compound-engineering-plugin/package.json; then \
+       cd /opt/pi-seed/git/github.com/EveryInc/compound-engineering-plugin \
+       && npm install --omit=dev --legacy-peer-deps --no-audit --no-fund --ignore-scripts \
+       && npm cache clean --force; \
+     fi
+
 RUN chmod 0755 /usr/local/bin/pi-sandbox-init \
-  && find /opt/pi-seed -type d -exec chmod 0755 {} + \
-  && find /opt/pi-seed -type f -exec chmod 0644 {} + \
+  && chmod -R u=rwX,go=rX /opt/pi-seed \
   && chown -R node:node /opt/pi-seed /sandbox
 
 USER node
