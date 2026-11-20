@@ -18,13 +18,23 @@ assert_contains() {
   fi
 }
 
+assert_not_contains() {
+  local haystack="$1" needle="$2" msg="$3"
+  if [[ "$haystack" == *"$needle"* ]]; then
+    echo "FAIL: $msg" >&2
+    echo "  expected NOT to contain: $needle" >&2
+    echo "  actual output: $haystack" >&2
+    exit 1
+  fi
+}
+
 # 1. Default environment (openshell-pi-dev) dry-run
 PROJ_DIR="$TMP_ROOT/my-project"
 mkdir -p "$PROJ_DIR"
 REAL_PROJ_DIR="$(cd "$PROJ_DIR" && pwd -P)"
 
-OUT1="$(cd "$PROJ_DIR" && env -u PI_OP_ENV -u PI_OP_ENVS -u PI_OPENSHELL_PROVIDER -u PI_OPENSHELL_PROVIDERS "$PI_OS" --dry-run -- --model qwen)"
-assert_contains "$OUT1" "openshell sandbox create" "standard dry-run invokes openshell sandbox create"
+OUT1="$(cd "$PROJ_DIR" && env -u PI_OP_ENV -u PI_OP_ENVS -u PI_OPENSHELL_PROVIDER -u PI_OPENSHELL_PROVIDERS -u PI_OPENSHELL_GATEWAY -u PI_OPENSHELL_GATEWAY_ENDPOINT "$PI_OS" --dry-run -- --model qwen)"
+assert_contains "$OUT1" "openshell sandbox create -g openshell" "standard dry-run targets local openshell gateway by default"
 assert_contains "$OUT1" "--no-keep" "standard dry-run uses --no-keep by default"
 assert_contains "$OUT1" "--no-auto-providers" "standard dry-run disables auto-providers"
 assert_contains "$OUT1" "--from pi-openshell:local" "standard dry-run selects pi-openshell:local"
@@ -234,7 +244,198 @@ fi
 GATEWAY_ENV_KEEP="$(DOCKER_HOST="unix:///custom/docker.sock" HOME="$FAKE_COLIMA_HOME" sh -c '. "$1"; printf "%s" "${DOCKER_HOST:-}"' _ "$DOTFILES_ROOT/pi/openshell/gateway.env")"
 assert_contains "$GATEWAY_ENV_KEEP" "unix:///custom/docker.sock" "gateway.env preserves explicit DOCKER_HOST"
 
-# 13. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
+# 13. Remote/cloud gateway dry-run skips local VM bind mounts & local image default
+OUT_REMOTE="$(cd "$HOME" && env -u PI_OPENSHELL_IMAGE -u PI_OPENSHELL_REMOTE_IMAGE -u PI_OPENSHELL_TEMPLATE -u PI_OPENSHELL_REMOTE_TEMPLATE "$PI_OS" -g platform-tools --dry-run -- --model qwen)"
+assert_contains "$OUT_REMOTE" "openshell sandbox create -g platform-tools" "remote dry-run forwards -g platform-tools"
+assert_not_contains "$OUT_REMOTE" "--driver-config-json" "remote dry-run omits local VM --driver-config-json bind mounts"
+assert_not_contains "$OUT_REMOTE" "PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions" "remote dry-run omits local host session mount env"
+assert_not_contains "$OUT_REMOTE" "--from pi-openshell:local" "remote dry-run omits local-only pi-openshell:local image"
+assert_contains "$OUT_REMOTE" "pi-sandbox-init" "remote dry-run uses resilient init wrapper"
+
+OUT_REMOTE_TPL="$(cd "$PROJ_DIR" && PI_OPENSHELL_REMOTE_TEMPLATE=pi-cloud "$PI_OS" -g platform-tools --no-policy --dry-run)"
+assert_contains "$OUT_REMOTE_TPL" "--template pi-cloud" "remote dry-run applies PI_OPENSHELL_REMOTE_TEMPLATE"
+assert_not_contains "$OUT_REMOTE_TPL" "--from " "remote template omits --from unless --image is explicit"
+assert_not_contains "$OUT_REMOTE_TPL" "--policy " "--no-policy omits --policy"
+
+OUT_REMOTE_IMG="$(cd "$PROJ_DIR" && PI_OPENSHELL_REMOTE_IMAGE=ghcr.io/example/pi:latest "$PI_OS" --gateway-endpoint https://gw.example.com --gateway-insecure --dry-run)"
+assert_contains "$OUT_REMOTE_IMG" "--gateway-endpoint https://gw.example.com --gateway-insecure" "forwards direct gateway endpoint and insecure flag"
+assert_contains "$OUT_REMOTE_IMG" "--from ghcr.io/example/pi:latest" "remote dry-run uses PI_OPENSHELL_REMOTE_IMAGE"
+
+OUT_LOCAL_OVERRIDE="$(cd "$PROJ_DIR" && PI_OPENSHELL_GATEWAY=platform-tools PI_OPENSHELL_GATEWAY_ENDPOINT=https://gw.example.com "$PI_OS" --local --dry-run)"
+assert_contains "$OUT_LOCAL_OVERRIDE" "openshell sandbox create -g openshell" "--local overrides remote gateway env vars back to local openshell"
+assert_contains "$OUT_LOCAL_OVERRIDE" "--driver-config-json" "--local re-enables VM bind mounts"
+
+# 14. Live gateway compute driver detection (port-forwarded non-VM remote gateway vs local VM gateway)
+GW_SHIM_DIR="$TMP_ROOT/gw-shim"
+mkdir -p "$GW_SHIM_DIR"
+cat > "$GW_SHIM_DIR/gh" <<'EOF'
+#!/usr/bin/env bash
+exit 1
+EOF
+chmod +x "$GW_SHIM_DIR/gh"
+cat > "$GW_SHIM_DIR/openshell" <<'EOF'
+#!/usr/bin/env bash
+SUB="${1:-}"
+ACT="${2:-}"
+TARGET_GW=""
+ARGS=("$@")
+for (( i=0; i<${#ARGS[@]}; i++ )); do
+  if [ "${ARGS[i]}" = "-g" ] || [ "${ARGS[i]}" = "--gateway" ]; then
+    TARGET_GW="${ARGS[i+1]:-}"
+  fi
+done
+if [ "$SUB" = "gateway" ] && [ "$ACT" = "info" ]; then
+  if [ "$TARGET_GW" = "platform-tools" ]; then
+    printf '{"gateway":"platform-tools","server":"https://127.0.0.1:8080","status":"healthy","compute_drivers":[{"name":"kubernetes"}]}\n'
+  else
+    printf '{"gateway":"openshell","server":"https://localhost:17670","status":"healthy","compute_drivers":[{"name":"vm"}]}\n'
+  fi
+  exit 0
+fi
+if [ "$SUB" = "gateway" ] && [ "$ACT" = "list" ]; then
+  printf '[{"name":"openshell","is_remote":false,"active":false},{"name":"platform-tools","is_remote":false,"active":true}]\n'
+  exit 0
+fi
+if [ "$SUB" = "provider" ] && [ "$ACT" = "list" ]; then
+  printf '{"next_page_token":"","providers":[{"name":"op-openshell-pi-dev","type":"openshell-pi-dev","credential_keys":["LITELLM_API_KEY"]}]}\n'
+  exit 0
+fi
+if [ "$SUB" = "sandbox" ] && [ "$ACT" = "create" ]; then
+  printf 'LIVE_SANDBOX:%s\n' "$*"
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$GW_SHIM_DIR/openshell"
+
+LIVE_LOCAL_OUT="$(cd "$PROJ_DIR" && env -u PI_OPENSHELL_GATEWAY -u PI_OPENSHELL_GATEWAY_ENDPOINT OPENSHELL_GATEWAY_ENDPOINT=https://127.0.0.1:8080 PATH="$GW_SHIM_DIR:$SHIM_DIR:$PATH" "$PI_OS")"
+assert_contains "$LIVE_LOCAL_OUT" "sandbox create -g openshell" "live default targets local openshell even when active gateway is remote"
+assert_contains "$LIVE_LOCAL_OUT" "--driver-config-json" "live local VM gateway attaches VM bind mounts"
+assert_contains "$LIVE_LOCAL_OUT" "--from pi-openshell:local" "live local VM gateway uses pi-openshell:local"
+
+LIVE_REMOTE_OUT="$(cd "$PROJ_DIR" && env -u PI_OPENSHELL_IMAGE -u PI_OPENSHELL_REMOTE_IMAGE -u PI_OPENSHELL_TEMPLATE -u PI_OPENSHELL_REMOTE_TEMPLATE PATH="$GW_SHIM_DIR:$SHIM_DIR:$PATH" "$PI_OS" -g platform-tools)"
+assert_contains "$LIVE_REMOTE_OUT" "sandbox create -g platform-tools" "live -g platform-tools targets remote gateway"
+assert_not_contains "$LIVE_REMOTE_OUT" "--driver-config-json" "live non-VM kubernetes driver (even on 127.0.0.1) skips VM bind mounts"
+assert_not_contains "$LIVE_REMOTE_OUT" "--from pi-openshell:local" "live non-VM gateway omits local-only image"
+
+# 15. Compound Engineering extension is copied from local host ~/.pi/agent/git into Dockerfile build context, settings.json, and pi-sandbox-init.sh
+SETTINGS_CONTENT="$(cat "$DOTFILES_ROOT/pi/openshell/settings.json")"
+assert_contains "$SETTINGS_CONTENT" "git:github.com/EveryInc/compound-engineering-plugin" "settings.json declares compound-engineering-plugin git package"
+DOCKERFILE_CONTENT="$(cat "$DOTFILES_ROOT/pi/openshell/Dockerfile.pi")"
+assert_contains "$DOCKERFILE_CONTENT" "COPY pi-seed/git/github.com/EveryInc/compound-engineering-plugin /opt/pi-seed/git/github.com/EveryInc/compound-engineering-plugin" "Dockerfile.pi copies host-staged compound-engineering-plugin into /opt/pi-seed/git"
+assert_not_contains "$DOCKERFILE_CONTENT" "git clone" "Dockerfile.pi does not clone compound-engineering-plugin directly from GitHub"
+assert_not_contains "$DOCKERFILE_CONTENT" "chmod 0644" "Dockerfile.pi preserves executable bits inside /opt/pi-seed"
+
+BUILD_TEST_DIR="$TMP_ROOT/build-test"
+BUILD_SHIM="$BUILD_TEST_DIR/shim"
+BUILD_HOME="$BUILD_TEST_DIR/home"
+BUILD_CAPTURED="$BUILD_TEST_DIR/captured.txt"
+mkdir -p "$BUILD_SHIM" "$BUILD_HOME"
+cat > "$BUILD_SHIM/docker" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = "info" ] || ([ "\${1:-}" = "buildx" ] && [ "\${2:-}" = "version" ]); then
+  exit 0
+fi
+CTX="\${@: -1}"
+if [ -f "\$CTX/pi-seed/git/github.com/EveryInc/compound-engineering-plugin/skills/ce-work/SKILL.md" ]; then
+  echo "HAS_CE_SKILL=1" > "$BUILD_CAPTURED"
+fi
+if [ -e "\$CTX/pi-seed/git/github.com/EveryInc/compound-engineering-plugin/node_modules" ]; then
+  echo "HAS_HOST_NODE_MODULES=1" >> "$BUILD_CAPTURED"
+fi
+printf 'CTX=%s\n' "\$CTX" >> "$BUILD_CAPTURED"
+exit 0
+EOF
+chmod +x "$BUILD_SHIM/docker"
+
+# Fails cleanly when local host checkout is missing
+set +e
+BUILD_MISS_OUT="$(HOME="$BUILD_HOME" env -u PI_CODING_AGENT_DIR -u PI_HOST_AGENT_DIR -u PI_COMPOUND_ENGINEERING_DIR PATH="$BUILD_SHIM:$PATH" "$DOTFILES_ROOT/pi/openshell/build-image.sh" 2>&1)"
+BUILD_MISS_RC=$?
+set -e
+[ "$BUILD_MISS_RC" -ne 0 ] || { echo "FAIL: build-image.sh should fail when host compound-engineering-plugin checkout is missing" >&2; exit 1; }
+assert_contains "$BUILD_MISS_OUT" "compound-engineering-plugin not found" "build-image.sh explains missing host checkout"
+
+# Copies host checkout into temp build context, strips host node_modules, and cleans up temp context
+mkdir -p "$BUILD_HOME/.pi/agent/git/github.com/EveryInc/compound-engineering-plugin/skills/ce-work" \
+         "$BUILD_HOME/.pi/agent/git/github.com/EveryInc/compound-engineering-plugin/node_modules/fake"
+echo "skill" > "$BUILD_HOME/.pi/agent/git/github.com/EveryInc/compound-engineering-plugin/skills/ce-work/SKILL.md"
+HOME="$BUILD_HOME" env -u PI_CODING_AGENT_DIR -u PI_HOST_AGENT_DIR -u PI_COMPOUND_ENGINEERING_DIR PATH="$BUILD_SHIM:$PATH" "$DOTFILES_ROOT/pi/openshell/build-image.sh"
+BUILD_CAP_CONTENT="$(cat "$BUILD_CAPTURED")"
+assert_contains "$BUILD_CAP_CONTENT" "HAS_CE_SKILL=1" "build-image.sh stages host ~/.pi/agent/git compound-engineering-plugin into Docker context"
+assert_not_contains "$BUILD_CAP_CONTENT" "HAS_HOST_NODE_MODULES=1" "build-image.sh excludes host node_modules from staged build context"
+STAGED_CTX_PATH="$(sed -n 's/^CTX=//p' "$BUILD_CAPTURED")"
+[ ! -e "$STAGED_CTX_PATH" ] || { echo "FAIL: build-image.sh should clean up temporary build context on exit" >&2; exit 1; }
+
+FAKE_SEED="$TMP_ROOT/fake-seed"
+mkdir -p "$FAKE_SEED/git/github.com/EveryInc/compound-engineering-plugin" "$FAKE_SEED/npm"
+FAKE_AGENT_CE="$TMP_ROOT/fake-agent-ce"
+HOME="$SANDBOX_INIT_HOME" PI_SEED_DIR="$FAKE_SEED" PI_CODING_AGENT_DIR="$FAKE_AGENT_CE" \
+  "$DOTFILES_ROOT/pi/openshell/pi-sandbox-init.sh" true
+[ -L "$FAKE_AGENT_CE/git" ] || { echo "FAIL: expected pi-sandbox-init to symlink \$AGENT_DIR/git to \$SEED_DIR/git" >&2; exit 1; }
+[ -d "$FAKE_AGENT_CE/git/github.com/EveryInc/compound-engineering-plugin" ] || { echo "FAIL: expected compound-engineering-plugin accessible via \$AGENT_DIR/git" >&2; exit 1; }
+
+# 16. install.sh preserves active remote gateway when re-registering local gateway & supports -g remote profile sync
+INSTALL_TEST_DIR="$TMP_ROOT/install-test"
+INSTALL_SHIM="$INSTALL_TEST_DIR/shim"
+INSTALL_LOG="$INSTALL_TEST_DIR/openshell.log"
+INSTALL_CFG="$INSTALL_TEST_DIR/xdg-config"
+mkdir -p "$INSTALL_SHIM" "$INSTALL_CFG"
+mkdir -p "$INSTALL_TEST_DIR/fake-tap/Formula"
+touch "$INSTALL_TEST_DIR/fake-tap/Formula/openshell.rb"
+cat > "$INSTALL_SHIM/brew" <<EOF
+#!/usr/bin/env bash
+if [ "\${1:-}" = "--repository" ]; then
+  printf '%s\n' "$INSTALL_TEST_DIR/fake-tap"
+  exit 0
+fi
+exit 0
+EOF
+chmod +x "$INSTALL_SHIM/brew"
+cat > "$INSTALL_SHIM/openshell" <<EOF
+#!/usr/bin/env bash
+printf '%s\n' "\$*" >> "$INSTALL_LOG"
+case "\${1:-} \${2:-}" in
+  "gateway list")
+    printf '[{"name":"platform-tools","is_remote":false,"active":true}]\n'
+    exit 0
+    ;;
+  "gateway add"|"gateway select"|"gateway info")
+    exit 0
+    ;;
+  "profile describe")
+    exit 1
+    ;;
+  "profile import"|"profile update")
+    exit 0
+    ;;
+esac
+exit 0
+EOF
+chmod +x "$INSTALL_SHIM/openshell"
+
+# Local install re-registers missing 'openshell' gateway and restores active 'platform-tools'
+INSTALL_LOCAL_OUT="$(HOME="$INSTALL_TEST_DIR" XDG_CONFIG_HOME="$INSTALL_CFG" LITELLM_BASE_URL="https://litellm.example.com" PATH="$INSTALL_SHIM:$SHIM_DIR:$PATH" \
+  "$DOTFILES_ROOT/pi/openshell/install.sh" --local)"
+INSTALL_LOG_CONTENT="$(cat "$INSTALL_LOG")"
+assert_contains "$INSTALL_LOG_CONTENT" "gateway add https://localhost:17670 --local --name openshell" "install.sh re-registers missing local openshell gateway"
+assert_contains "$INSTALL_LOG_CONTENT" "gateway select platform-tools" "install.sh preserves previously active remote gateway"
+assert_contains "$INSTALL_LOG_CONTENT" "profile import -g openshell" "install.sh imports profiles explicitly against -g openshell"
+[ -f "$INSTALL_CFG/openshell/gateway.toml" ] || { echo "FAIL: local install.sh should stage gateway.toml" >&2; exit 1; }
+[ -f "$INSTALL_CFG/openshell/.profile-openshell-github.sha256" ] || { echo "FAIL: local install.sh should write gateway-scoped profile stamp" >&2; exit 1; }
+
+# Remote install syncs profiles to -g platform-tools without writing local gateway.toml
+REMOTE_CFG="$INSTALL_TEST_DIR/xdg-remote"
+mkdir -p "$REMOTE_CFG"
+: > "$INSTALL_LOG"
+HOME="$INSTALL_TEST_DIR" XDG_CONFIG_HOME="$REMOTE_CFG" LITELLM_BASE_URL="https://litellm.example.com" PATH="$INSTALL_SHIM:$SHIM_DIR:$PATH" \
+  "$DOTFILES_ROOT/pi/openshell/install.sh" -g platform-tools >/dev/null
+REMOTE_LOG_CONTENT="$(cat "$INSTALL_LOG")"
+assert_contains "$REMOTE_LOG_CONTENT" "profile import -g platform-tools" "remote install.sh imports profiles against -g platform-tools"
+[ ! -f "$REMOTE_CFG/openshell/gateway.toml" ] || { echo "FAIL: remote install.sh must not stage local gateway.toml" >&2; exit 1; }
+[ -f "$REMOTE_CFG/openshell/.profile-platform-tools-github.sha256" ] || { echo "FAIL: remote install.sh should write remote-scoped profile stamp" >&2; exit 1; }
+
+# 17. Ensure no hardcoded *.1password.com account domains exist in pi/ or bin/pi-os
 if git -C "$DOTFILES_ROOT" grep -En "[A-Za-z0-9-]+\.1password\.com" -- pi/ bin/pi-os ':!pi/openshell/test-pi-os.sh'; then
   echo "FAIL: found hardcoded 1Password account domain in repository files" >&2
   exit 1

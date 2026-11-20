@@ -7,7 +7,7 @@ export PI_SKIP_VERSION_CHECK="${PI_SKIP_VERSION_CHECK:-1}"
 if [ -d "/sandbox/sessions" ] && [ -z "${PI_CODING_AGENT_SESSION_DIR:-}" ]; then
   export PI_CODING_AGENT_SESSION_DIR="/sandbox/sessions"
 fi
-SEED_DIR="/opt/pi-seed"
+SEED_DIR="${PI_SEED_DIR:-/opt/pi-seed}"
 
 mkdir -p "$AGENT_DIR/extensions"
 
@@ -64,6 +64,10 @@ fi
 
 if [ -d "$SEED_DIR/npm" ] && [ ! -e "$AGENT_DIR/npm" ]; then
   ln -s "$SEED_DIR/npm" "$AGENT_DIR/npm"
+fi
+
+if [ -d "$SEED_DIR/git" ] && [ ! -e "$AGENT_DIR/git" ]; then
+  ln -s "$SEED_DIR/git" "$AGENT_DIR/git"
 fi
 
 if [ "${1:-}" = "--workdir" ]; then

@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 #
-# pi-os -- launch Pi inside an NVIDIA OpenShell Apple Hypervisor MicroVM
+# pi-os -- launch Pi inside an NVIDIA OpenShell sandbox (local MicroVM or remote gateway)
 #
-# Mounts the active project directory (or common repository root when inside a
-# linked git worktree) into /sandbox/work via virtiofs and attaches one or more
-# 1Password Environment-backed OpenShell providers (default: openshell-pi-dev).
+# Defaults to the local 'openshell' Apple Hypervisor MicroVM gateway so switching
+# 'openshell gateway select' to a remote/cloud gateway does not break local usage.
+# Pass -g/--gateway <name> or --gateway-endpoint <url> to target a remote gateway.
+# On local VM gateways, mounts the active project directory (or common repository
+# root when inside a linked git worktree) into /sandbox/work via virtiofs and
+# attaches one or more 1Password Environment-backed OpenShell providers
+# (default: openshell-pi-dev).
 
 set -euo pipefail
 
@@ -12,9 +16,22 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
 DOTFILES_ROOT="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 
 IMAGE="${PI_OPENSHELL_IMAGE:-pi-openshell:local}"
+IMAGE_EXPLICIT=0
+REMOTE_IMAGE="${PI_OPENSHELL_REMOTE_IMAGE:-}"
+TEMPLATE="${PI_OPENSHELL_TEMPLATE:-}"
+TEMPLATE_EXPLICIT=0
+REMOTE_TEMPLATE="${PI_OPENSHELL_REMOTE_TEMPLATE:-}"
 POLICY_FILE="${PI_OPENSHELL_POLICY:-$DOTFILES_ROOT/pi/openshell/policy.yaml}"
+NO_POLICY=0
+if [ "${PI_OPENSHELL_POLICY+set}" = "set" ] && [ -z "$PI_OPENSHELL_POLICY" ]; then
+  NO_POLICY=1
+fi
 OP_READ_HELPER="$DOTFILES_ROOT/pi/openshell/op-read.sh"
 HOST_SESSION_DIR="${PI_OPENSHELL_SESSION_DIR:-$HOME/.pi/agent/sessions/sandbox}"
+LOCAL_GATEWAY_NAME="${PI_OPENSHELL_LOCAL_GATEWAY:-openshell}"
+GATEWAY="${PI_OPENSHELL_GATEWAY:-$LOCAL_GATEWAY_NAME}"
+GATEWAY_ENDPOINT="${PI_OPENSHELL_GATEWAY_ENDPOINT:-}"
+GATEWAY_INSECURE="${PI_OPENSHELL_GATEWAY_INSECURE:-0}"
 SANDBOX_NAME=""
 KEEP_SANDBOX=0
 DRY_RUN=0
@@ -25,22 +42,30 @@ EXPLICIT_PROVIDERS=()
 
 usage() {
   cat <<'EOF'
-pi-os -- run Pi inside an OpenShell Apple Hypervisor MicroVM
+pi-os -- run Pi inside an OpenShell sandbox (local MicroVM or remote gateway)
 
 Usage:
   pi-os [wrapper-options] [--] [pi-arguments...]
 
 Wrapper options:
-  -e, --op-env <name>    1Password Environment name; repeatable for stacking
-                         (default: $PI_OP_ENVS or $PI_OP_ENV or openshell-pi-dev)
-  -p, --provider <name>  Explicit OpenShell provider to attach; repeatable
-                         (default: derived from --op-env names)
-  --image <ref>          Sandbox image reference (default: pi-openshell:local)
-  --name <name>          Explicit sandbox name (default: auto-generated)
-  --keep                 Keep the sandbox after Pi exits (default: --no-keep)
-  --shell                Start an interactive bash shell instead of pi
-  --dry-run              Print the resolved openshell command without executing
-  -h, --help             Show this help message
+  -g, --gateway <name>       OpenShell gateway name (default: $PI_OPENSHELL_GATEWAY or openshell)
+  --gateway-endpoint <url>   Direct OpenShell gateway endpoint URL (overrides -g)
+  --gateway-insecure         Skip TLS certificate verification for gateway connections
+  --local                    Target the local Apple Hypervisor gateway (shorthand for -g openshell)
+  -e, --op-env <name>        1Password Environment name; repeatable for stacking
+                             (default: $PI_OP_ENVS or $PI_OP_ENV or openshell-pi-dev)
+  -p, --provider <name>      Explicit OpenShell provider to attach; repeatable
+                             (default: derived from --op-env names)
+  --image <ref>              Sandbox image reference (local default: pi-openshell:local;
+                             remote default: $PI_OPENSHELL_REMOTE_IMAGE or gateway default)
+  --template <name>          Sandbox template name (remote default: $PI_OPENSHELL_REMOTE_TEMPLATE)
+  --policy <path>            Custom sandbox policy YAML file
+  --no-policy                Omit --policy and use the gateway/template default policy
+  --name <name>              Explicit sandbox name (default: auto-generated)
+  --keep                     Keep the sandbox after Pi exits (default: --no-keep)
+  --shell                    Start an interactive bash shell instead of pi
+  --dry-run                  Print the resolved openshell command without executing
+  -h, --help                 Show this help message
 EOF
 }
 
@@ -62,6 +87,26 @@ append_csv_or_val() {
 PI_ARGS=()
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    -g|--gateway)
+      [ "$#" -ge 2 ] || { echo "pi-os: $1 requires a value" >&2; exit 2; }
+      GATEWAY="$2"
+      GATEWAY_ENDPOINT=""
+      shift 2
+      ;;
+    --gateway-endpoint)
+      [ "$#" -ge 2 ] || { echo "pi-os: --gateway-endpoint requires a value" >&2; exit 2; }
+      GATEWAY_ENDPOINT="$2"
+      shift 2
+      ;;
+    --gateway-insecure)
+      GATEWAY_INSECURE=1
+      shift
+      ;;
+    --local)
+      GATEWAY="$LOCAL_GATEWAY_NAME"
+      GATEWAY_ENDPOINT=""
+      shift
+      ;;
     -e|--op-env)
       [ "$#" -ge 2 ] || { echo "pi-os: $1 requires a value" >&2; exit 2; }
       append_csv_or_val OP_ENVS "$2"
@@ -75,7 +120,24 @@ while [ "$#" -gt 0 ]; do
     --image)
       [ "$#" -ge 2 ] || { echo "pi-os: --image requires a value" >&2; exit 2; }
       IMAGE="$2"
+      IMAGE_EXPLICIT=1
       shift 2
+      ;;
+    --template)
+      [ "$#" -ge 2 ] || { echo "pi-os: --template requires a value" >&2; exit 2; }
+      TEMPLATE="$2"
+      TEMPLATE_EXPLICIT=1
+      shift 2
+      ;;
+    --policy)
+      [ "$#" -ge 2 ] || { echo "pi-os: --policy requires a value" >&2; exit 2; }
+      POLICY_FILE="$2"
+      NO_POLICY=0
+      shift 2
+      ;;
+    --no-policy)
+      NO_POLICY=1
+      shift
       ;;
     --name)
       [ "$#" -ge 2 ] || { echo "pi-os: --name requires a value" >&2; exit 2; }
@@ -138,6 +200,20 @@ else
   done
 fi
 
+GW_ARGS=()
+if [ -n "$GATEWAY_ENDPOINT" ]; then
+  unset OPENSHELL_GATEWAY
+  GW_ARGS=(--gateway-endpoint "$GATEWAY_ENDPOINT")
+  GW_LABEL="$GATEWAY_ENDPOINT"
+else
+  unset OPENSHELL_GATEWAY_ENDPOINT
+  GW_ARGS=(-g "$GATEWAY")
+  GW_LABEL="$GATEWAY"
+fi
+if [ "$GATEWAY_INSECURE" = "1" ] || [ "$GATEWAY_INSECURE" = "true" ]; then
+  GW_ARGS+=(--gateway-insecure)
+fi
+
 PHYSICAL_CWD="$(pwd -P)"
 PHYSICAL_HOME="$(cd "$HOME" && pwd -P)"
 
@@ -161,70 +237,15 @@ is_denied_mount_path() {
   return 1
 }
 
-if is_denied_mount_path "$PHYSICAL_CWD"; then
-  echo "pi-os: refusing to mount '$PHYSICAL_CWD' into the sandbox VM; cd into a project directory first." >&2
-  exit 1
-fi
-
-MOUNT_SOURCE="$PHYSICAL_CWD"
-GUEST_WORKDIR="/sandbox/work"
-
-# When inside a git repository or linked worktree, mount the common repository
-# root (so linked worktree .git pointers resolve inside the VM) when the active
-# directory lives underneath that root.
-if git rev-parse --git-dir >/dev/null 2>&1; then
-  COMMON_GIT_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
-  if [ -n "$COMMON_GIT_DIR" ] && [ "$(basename "$COMMON_GIT_DIR")" = ".git" ]; then
-    COMMON_ROOT="$(cd "$(dirname "$COMMON_GIT_DIR")" && pwd -P)"
-    if ! is_denied_mount_path "$COMMON_ROOT"; then
-      case "$PHYSICAL_CWD" in
-        "$COMMON_ROOT")
-          MOUNT_SOURCE="$COMMON_ROOT"
-          GUEST_WORKDIR="/sandbox/work"
-          ;;
-        "$COMMON_ROOT"/*)
-          REL_SUBPATH="${PHYSICAL_CWD#"$COMMON_ROOT"/}"
-          MOUNT_SOURCE="$COMMON_ROOT"
-          GUEST_WORKDIR="/sandbox/work/$REL_SUBPATH"
-          ;;
-      esac
-    fi
-  fi
-fi
-
-if [ ! -f "$POLICY_FILE" ]; then
+if [ "$NO_POLICY" -eq 0 ] && [ -n "$POLICY_FILE" ] && [ ! -f "$POLICY_FILE" ]; then
   echo "pi-os: sandbox policy file not found: $POLICY_FILE" >&2
   exit 1
 fi
 
 EXTRA_ENV_ARGS=()
-
-mkdir -p "$HOST_SESSION_DIR"
-REAL_SESSION_DIR="$(cd "$HOST_SESSION_DIR" && pwd -P)"
-
-DRIVER_JSON="$(python3 -c '
-import json, sys
-print(json.dumps({
-  "vm": {
-    "mounts": [
-      {
-        "type": "bind",
-        "source": sys.argv[1],
-        "target": "/sandbox/work",
-        "read_only": False,
-      },
-      {
-        "type": "bind",
-        "source": sys.argv[2],
-        "target": "/sandbox/sessions",
-        "read_only": False,
-      },
-    ]
-  }
-}, separators=(",", ":")))
-' "$MOUNT_SOURCE" "$REAL_SESSION_DIR")"
-
-EXTRA_ENV_ARGS+=(--env "PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions")
+IS_LOCAL_VM=1
+DRIVER_JSON=""
+GUEST_WORKDIR="/sandbox/work"
 
 normalize_base_url() {
   python3 -c '
@@ -239,11 +260,12 @@ print(u)
 ' "$1"
 }
 
-# EXTRA_ENV_ARGS initialized before mount/session setup
-
 EXPLICIT_ENV_GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
 if [ "$DRY_RUN" -eq 1 ]; then
+  if [ -n "$GATEWAY_ENDPOINT" ] || [ "$GATEWAY" != "$LOCAL_GATEWAY_NAME" ]; then
+    IS_LOCAL_VM=0
+  fi
   if [ -n "${LITELLM_BASE_URL:-}" ]; then
     NORM_URL="$(normalize_base_url "$LITELLM_BASE_URL")"
     [ -n "$NORM_URL" ] && EXTRA_ENV_ARGS+=(--env "LITELLM_BASE_URL=$NORM_URL")
@@ -258,22 +280,58 @@ else
     exit 1
   fi
 
-  if ! openshell gateway info >/dev/null 2>&1; then
-    echo "pi-os: OpenShell gateway is not reachable. Start it with:" >&2
-    echo "  brew services restart nvidia/openshell/openshell" >&2
-    echo "  openshell gateway add https://localhost:17670 --local --name openshell" >&2
+  if ! GATEWAY_INFO_JSON="$(openshell gateway info "${GW_ARGS[@]}" -o json 2>/dev/null)"; then
+    if [ -z "$GATEWAY_ENDPOINT" ] && [ "$GATEWAY" = "$LOCAL_GATEWAY_NAME" ]; then
+      echo "pi-os: Local OpenShell gateway '$GATEWAY' is not reachable. Start it with:" >&2
+      echo "  brew services restart nvidia/openshell/openshell" >&2
+      echo "  openshell gateway add https://localhost:17670 --local --name $GATEWAY" >&2
+      echo "Or target a remote gateway with: pi-os -g <gateway-name>" >&2
+    else
+      echo "pi-os: OpenShell gateway '$GW_LABEL' is not reachable." >&2
+      echo "Verify the remote gateway endpoint/tunnel is active (check 'openshell gateway list' and 'openshell status ${GW_ARGS[*]}')." >&2
+    fi
     exit 1
   fi
+
+  GATEWAY_LIST_JSON="$(openshell gateway list -o json 2>/dev/null || echo "[]")"
+  IS_LOCAL_VM="$(python3 -c '
+import json, sys, urllib.parse
+info_raw, list_raw, gw_name, gw_endpoint, local_gw_name = sys.argv[1:6]
+try:
+    info = json.loads(info_raw) if info_raw.strip() else None
+except Exception:
+    info = None
+if isinstance(info, dict) and "compute_drivers" in info:
+    drivers = [d.get("name") for d in (info.get("compute_drivers") or []) if isinstance(d, dict)]
+    has_vm = "vm" in drivers
+    is_remote = False
+    if gw_endpoint:
+        host = (urllib.parse.urlparse(gw_endpoint).hostname or "").lower()
+        is_remote = host not in ("localhost", "127.0.0.1", "::1")
+    else:
+        try:
+            gws = json.loads(list_raw) if list_raw.strip() else []
+        except Exception:
+            gws = []
+        for g in (gws if isinstance(gws, list) else []):
+            if isinstance(g, dict) and g.get("name") == gw_name:
+                is_remote = bool(g.get("is_remote"))
+                break
+    print("1" if (has_vm and not is_remote) else "0")
+else:
+    print("1" if (not gw_endpoint and gw_name == local_gw_name) else "0")
+' "$GATEWAY_INFO_JSON" "$GATEWAY_LIST_JSON" "$GATEWAY" "$GATEWAY_ENDPOINT" "$LOCAL_GATEWAY_NAME")"
 
   # Note: 'openshell provider get' has no -o json flag in OpenShell 0.1.x;
   # query 'openshell provider list -o json' (metadata only, never secret values).
   ALL_PROVIDERS_JSON="$(python3 -c '
 import json, subprocess, sys
 
+gw_args = sys.argv[1:]
 providers = []
 token = ""
 while True:
-    cmd = ["openshell", "provider", "list", "-o", "json"]
+    cmd = ["openshell", "provider", "list", *gw_args, "-o", "json"]
     if token:
         cmd.extend(["--page-token", token])
     res = subprocess.run(cmd, capture_output=True, text=True)
@@ -285,7 +343,7 @@ while True:
     if not token:
         break
 print(json.dumps(providers))
-' 2>/dev/null || echo "[]")"
+' "${GW_ARGS[@]}" 2>/dev/null || echo "[]")"
 
   EXPLICIT_MODE=0
   [ "${#EXPLICIT_PROVIDERS[@]}" -gt 0 ] && EXPLICIT_MODE=1
@@ -340,7 +398,7 @@ for k in sorted(keys):
   case "$STATUS_LINE" in
     MISSING:*)
       MISS_PROV="${STATUS_LINE#MISSING:}"
-      echo "pi-os: OpenShell provider '$MISS_PROV' (or 'op-$MISS_PROV') is not configured on the gateway." >&2
+      echo "pi-os: OpenShell provider '$MISS_PROV' (or 'op-$MISS_PROV') is not configured on gateway '$GW_LABEL'." >&2
       echo "Connect your 1Password Environment to OpenShell in 1Password Desktop" >&2
       echo "(see $DOTFILES_ROOT/pi/openshell/README.md for setup steps)." >&2
       exit 1
@@ -368,7 +426,7 @@ for k in sorted(keys):
   if [ -z "${LITELLM_BASE_URL:-}" ] && [ -n "$PROVIDER_TYPES" ]; then
     while IFS= read -r ptype; do
       [ -n "$ptype" ] || continue
-      prof_json="$(openshell profile describe "$ptype" -o json 2>/dev/null || true)"
+      prof_json="$(openshell profile describe "${GW_ARGS[@]}" "$ptype" -o json 2>/dev/null || true)"
       [ -n "$prof_json" ] || continue
       cand_prof_url="$(printf '%s' "$prof_json" | python3 -c '
 import json, sys
@@ -428,10 +486,10 @@ print("1" if any(p.get("name") == target for p in json.load(sys.stdin)) else "0"
 ' "$GH_PROVIDER_NAME")"
       if [ "$GH_PROVIDER_EXISTS" = "1" ]; then
         GITHUB_TOKEN="$RESOLVED_GH_TOKEN" GH_TOKEN="$RESOLVED_GH_TOKEN" \
-          openshell provider update "$GH_PROVIDER_NAME" --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
+          openshell provider update "${GW_ARGS[@]}" "$GH_PROVIDER_NAME" --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
       else
         GITHUB_TOKEN="$RESOLVED_GH_TOKEN" GH_TOKEN="$RESOLVED_GH_TOKEN" \
-          openshell provider create --name "$GH_PROVIDER_NAME" --type github --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
+          openshell provider create "${GW_ARGS[@]}" --name "$GH_PROVIDER_NAME" --type github --credential GITHUB_TOKEN --credential GH_TOKEN >/dev/null
       fi
       PROVIDERS+=("$GH_PROVIDER_NAME")
     fi
@@ -533,19 +591,112 @@ for k, v in merged.items():
   fi
 fi
 
-CMD=(openshell sandbox create)
+if [ "$IS_LOCAL_VM" -eq 1 ]; then
+  if is_denied_mount_path "$PHYSICAL_CWD"; then
+    echo "pi-os: refusing to mount '$PHYSICAL_CWD' into the sandbox VM; cd into a project directory first." >&2
+    exit 1
+  fi
+
+  MOUNT_SOURCE="$PHYSICAL_CWD"
+  GUEST_WORKDIR="/sandbox/work"
+
+  # When inside a git repository or linked worktree, mount the common repository
+  # root (so linked worktree .git pointers resolve inside the VM) when the active
+  # directory lives underneath that root.
+  if git rev-parse --git-dir >/dev/null 2>&1; then
+    COMMON_GIT_DIR="$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    if [ -n "$COMMON_GIT_DIR" ] && [ "$(basename "$COMMON_GIT_DIR")" = ".git" ]; then
+      COMMON_ROOT="$(cd "$(dirname "$COMMON_GIT_DIR")" && pwd -P)"
+      if ! is_denied_mount_path "$COMMON_ROOT"; then
+        case "$PHYSICAL_CWD" in
+          "$COMMON_ROOT")
+            MOUNT_SOURCE="$COMMON_ROOT"
+            GUEST_WORKDIR="/sandbox/work"
+            ;;
+          "$COMMON_ROOT"/*)
+            REL_SUBPATH="${PHYSICAL_CWD#"$COMMON_ROOT"/}"
+            MOUNT_SOURCE="$COMMON_ROOT"
+            GUEST_WORKDIR="/sandbox/work/$REL_SUBPATH"
+            ;;
+        esac
+      fi
+    fi
+  fi
+
+  mkdir -p "$HOST_SESSION_DIR"
+  REAL_SESSION_DIR="$(cd "$HOST_SESSION_DIR" && pwd -P)"
+
+  DRIVER_JSON="$(python3 -c '
+import json, sys
+print(json.dumps({
+  "vm": {
+    "mounts": [
+      {
+        "type": "bind",
+        "source": sys.argv[1],
+        "target": "/sandbox/work",
+        "read_only": False,
+      },
+      {
+        "type": "bind",
+        "source": sys.argv[2],
+        "target": "/sandbox/sessions",
+        "read_only": False,
+      },
+    ]
+  }
+}, separators=(",", ":")))
+' "$MOUNT_SOURCE" "$REAL_SESSION_DIR")"
+
+  if [ "${#EXTRA_ENV_ARGS[@]}" -gt 0 ]; then
+    EXTRA_ENV_ARGS=(--env "PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions" "${EXTRA_ENV_ARGS[@]}")
+  else
+    EXTRA_ENV_ARGS=(--env "PI_CODING_AGENT_SESSION_DIR=/sandbox/sessions")
+  fi
+fi
+
+SELECTED_TEMPLATE=""
+if [ "$TEMPLATE_EXPLICIT" -eq 1 ]; then
+  SELECTED_TEMPLATE="$TEMPLATE"
+elif [ "$IS_LOCAL_VM" -eq 0 ] && [ -n "$REMOTE_TEMPLATE" ]; then
+  SELECTED_TEMPLATE="$REMOTE_TEMPLATE"
+elif [ -n "$TEMPLATE" ]; then
+  SELECTED_TEMPLATE="$TEMPLATE"
+fi
+
+SELECTED_IMAGE=""
+if [ "$IMAGE_EXPLICIT" -eq 1 ]; then
+  SELECTED_IMAGE="$IMAGE"
+elif [ -n "$SELECTED_TEMPLATE" ]; then
+  SELECTED_IMAGE=""
+elif [ "$IS_LOCAL_VM" -eq 1 ]; then
+  SELECTED_IMAGE="$IMAGE"
+elif [ -n "$REMOTE_IMAGE" ]; then
+  SELECTED_IMAGE="$REMOTE_IMAGE"
+elif [ -n "${PI_OPENSHELL_IMAGE:-}" ]; then
+  SELECTED_IMAGE="$PI_OPENSHELL_IMAGE"
+fi
+
+CMD=(openshell sandbox create "${GW_ARGS[@]}")
 if [ "$KEEP_SANDBOX" -eq 0 ]; then
   CMD+=(--no-keep)
 fi
-CMD+=(
-  --no-auto-providers
-  --from "$IMAGE"
-  --policy "$POLICY_FILE"
-)
+CMD+=(--no-auto-providers)
+if [ -n "$SELECTED_TEMPLATE" ]; then
+  CMD+=(--template "$SELECTED_TEMPLATE")
+fi
+if [ -n "$SELECTED_IMAGE" ]; then
+  CMD+=(--from "$SELECTED_IMAGE")
+fi
+if [ "$NO_POLICY" -eq 0 ] && [ -n "$POLICY_FILE" ]; then
+  CMD+=(--policy "$POLICY_FILE")
+fi
 for prov in "${PROVIDERS[@]}"; do
   CMD+=(--provider "$prov")
 done
-CMD+=(--driver-config-json "$DRIVER_JSON")
+if [ -n "$DRIVER_JSON" ]; then
+  CMD+=(--driver-config-json "$DRIVER_JSON")
+fi
 if [ "${#EXTRA_ENV_ARGS[@]}" -gt 0 ]; then
   CMD+=("${EXTRA_ENV_ARGS[@]}")
 fi
@@ -553,7 +704,11 @@ if [ -n "$SANDBOX_NAME" ]; then
   CMD+=(--name "$SANDBOX_NAME")
 fi
 
-CMD+=(-- /usr/local/bin/pi-sandbox-init --workdir "$GUEST_WORKDIR")
+if [ "$IS_LOCAL_VM" -eq 1 ]; then
+  CMD+=(-- /usr/local/bin/pi-sandbox-init --workdir "$GUEST_WORKDIR")
+else
+  CMD+=(-- sh -c 'if [ -x /usr/local/bin/pi-sandbox-init ]; then exec /usr/local/bin/pi-sandbox-init "$@"; else exec "$@"; fi' pi-os)
+fi
 if [ "$RUN_SHELL" -eq 1 ]; then
   CMD+=(bash)
 else

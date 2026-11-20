@@ -1,7 +1,8 @@
 {
   "packages": [
     "npm:pi-subagents",
-    "npm:pi-ask-user"
+    "npm:pi-ask-user",
+    "git:github.com/EveryInc/compound-engineering-plugin"
   ],
   "theme": "dark",
   "defaultProvider": "litellm",
